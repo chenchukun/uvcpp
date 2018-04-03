@@ -1,5 +1,5 @@
-#ifndef UTILITY_H
-#define UTILITY_H
+#ifndef LIBUVCPP_UTILITY_H
+#define LIBUVCPP_UTILITY_H
 
 #ifdef _WIN32
 
@@ -128,4 +128,4 @@ inline int gettimeofday(struct timeval *tp, void *tzp)
 
 #define NAMESPACE_END }
 
-#endif //UTILITY_H
+#endif //LIBUVCPP_UTILITY_H

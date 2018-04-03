@@ -1,5 +1,5 @@
-#ifndef EVENTLOOP_H
-#define EVENTLOOP_H
+#ifndef LIBUVCPP_EVENTLOOP_H
+#define LIBUVCPP_EVENTLOOP_H
 
 #include <cstdlib>
 #include <uv.h>
@@ -7,6 +7,8 @@
 #include <thread>
 #include <mutex>
 #include "utility.h"
+#include "Any.h"
+#include "Timeval.h"
 
 NAMESPACE_START
 
@@ -28,7 +30,7 @@ public:
 
     // 执行事件循环
     void run(uv_run_mode mode = UV_RUN_DEFAULT) {
-        while (true) {
+        while (run_) {
             uv_run(loop_, mode);
         }
     }
@@ -51,13 +53,21 @@ public:
         return threadId_;
     }
 
-    uv_timer_t* runAt(struct timeval time, TimerCallback cb);
+    uv_timer_t* runAt(Timeval time, TimerCallback cb);
 
-    uv_timer_t* runAfter(uint32_t delay, TimerCallback cb);
+    uv_timer_t* runAfter(uint64_t delay, TimerCallback cb);
 
-    uv_timer_t* runEvery(uint32_t interval, TimerCallback cb);
+    uv_timer_t* runEvery(uint64_t interval, TimerCallback cb);
 
     void cancel(uv_timer_t *timer);
+
+    void setData(Any data) {
+        data_.swap(data);
+    }
+
+    Any& getData() {
+        return data_;
+    }
 
 private:
     static void asyncCallback(uv_async_t *async);
@@ -66,7 +76,7 @@ private:
 
     static void closeCallback(uv_handle_t* handle);
 
-    uv_timer_t* timerRunImpl(struct timeval time, uint32_t interval, TimerCallback cb);
+    uv_timer_t* timerRunImpl(Timeval time, uint64_t interval, TimerCallback cb);
 
 private:
     uv_loop_t *loop_;
@@ -74,6 +84,10 @@ private:
     std::mutex mutex_;
 
     std::thread::id threadId_;
+
+    bool run_;
+
+    Any data_;
 };
 
 NAMESPACE_END

@@ -10,6 +10,7 @@ NAMESPACE_START
 __thread EventLoop *currEventLoop = NULL;
 
 EventLoop::EventLoop()
+    : run_(true)
 {
     threadId_ = std::this_thread::get_id();
     assert(currEventLoop == NULL);
@@ -28,6 +29,7 @@ EventLoop::~EventLoop()
 void EventLoop::stop()
 {
     uv_loop_t *loop = loop_;
+    run_ = false;
     runInLoopThread([loop] () {
         uv_stop(loop);
     });
@@ -50,43 +52,40 @@ void EventLoop::runInLoopThread(AsyncCallback cb)
     }
 }
 
-uv_timer_t* EventLoop::timerRunImpl(struct timeval time, uint32_t interval, TimerCallback cb)
+uv_timer_t* EventLoop::timerRunImpl(Timeval time, uint64_t interval, TimerCallback cb)
 {
     if (cb != NULL) {
-        TIMEVAL_NOW(now);
-
-        TIMEVAL_DIFF(diff, time, now);
+        Timeval diff = time - Timeval();
 
         uv_timer_t *timer = static_cast<uv_timer_t*>(malloc(sizeof(uv_timer_t)));
         timer->data = static_cast<void*>(new TimerCallback(cb));
         uv_loop_t *loop = loop_;
         runInLoopThread([loop, timer, diff, interval] () {
             uv_timer_init(loop, timer);
-            uv_timer_start(timer, EventLoop::timerCallback, diff.tv_sec*1000 + diff.tv_usec/1000, interval);
+            uv_timer_start(timer, EventLoop::timerCallback, diff.millisecond(), interval);
         });
         return timer;
     }
     return NULL;
 }
 
-uv_timer_t* EventLoop::runAt(struct timeval time, TimerCallback cb)
+uv_timer_t* EventLoop::runAt(Timeval time, TimerCallback cb)
 {
     return timerRunImpl(time, 0, cb);
 }
 
-uv_timer_t* EventLoop::runAfter(uint32_t delay, TimerCallback cb)
+uv_timer_t* EventLoop::runAfter(uint64_t delay, TimerCallback cb)
 {
-    TIMEVAL_NOW(now);
-    struct timeval tvdelay{delay/1000, (int32_t)((delay*1000)%1000000)};
-    return timerRunImpl(tvdelay, 0, cb);
+    Timeval now;
+    now += delay * 1000;
+    return timerRunImpl(now, 0, cb);
 }
 
-uv_timer_t* EventLoop::runEvery(uint32_t interval, TimerCallback cb)
+uv_timer_t* EventLoop::runEvery(uint64_t interval, TimerCallback cb)
 {
-    TIMEVAL_NOW(now);
-    struct timeval tvint{interval/1000, (int32_t)((interval*1000)%1000000)};
-    TIMEVAL_ADD(tv, now, tvint);
-    return timerRunImpl(tv, interval, cb);
+    Timeval now;
+    now += interval * 1000;
+    return timerRunImpl(now, interval, cb);
 }
 
 void EventLoop::cancel(uv_timer_t *timer)
