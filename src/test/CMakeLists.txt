@@ -8,3 +8,6 @@ target_link_libraries(testTimeval uvcpp_static)
 
 add_executable(testAny "testAny.cpp")
 target_link_libraries(testAny uvcpp_static)
+
+add_executable(testEventLoopThread "testEventLoopThread.cpp")
+target_link_libraries(testEventLoopThread uvcpp_static)
