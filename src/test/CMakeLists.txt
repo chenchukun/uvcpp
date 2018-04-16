@@ -11,3 +11,6 @@ target_link_libraries(testAny uvcpp_static)
 
 add_executable(testEventLoopThread "testEventLoopThread.cpp")
 target_link_libraries(testEventLoopThread uvcpp_static)
+
+add_executable(testTcpServer "testTcpServer.cpp")
+target_link_libraries(testTcpServer uvcpp_static)
