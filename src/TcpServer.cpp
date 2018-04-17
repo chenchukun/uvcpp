@@ -9,7 +9,11 @@ TcpServer::TcpServer(EventLoop *loop)
       eventLoopThreadPool_(NULL),
       threadNum_(0),
       threadInitCallback_(NULL),
-      connectionCallback_(NULL)
+      connectionCallback_(NULL),
+      connectionId_(0),
+      messageCallback_(NULL),
+      errorCallback_(NULL),
+      writeCompleteCallback_(NULL)
 {
 
 }
@@ -60,10 +64,12 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
         int ret = uv_accept(server, reinterpret_cast<uv_stream_t*>(client));
         if (ret == 0) {
             if (tcpServer->eventLoopThreadPool_ != NULL) {
-                EventLoop *loop = tcpServer->eventLoopThreadPool_->getLoop(*reinterpret_cast<size_t *>(client));
+                size_t id = tcpServer->connectionId_;
+                tcpServer->connectionId_++;
+                EventLoop *loop = tcpServer->eventLoopThreadPool_->getLoop(id);
                 uv_unref(reinterpret_cast<uv_handle_t*>(client));
                 ConnectionCallback callback = tcpServer->connectionCallback_;
-                loop->runInLoopThread([client, callback]{
+                loop->runInLoopThread([client, callback, id]{
                     client->loop = EventLoop::getCurrThreadEventLoop()->getLoop();
                     uv_ref(reinterpret_cast<uv_handle_t*>(client));
                     // call connectionCallback
@@ -85,6 +91,10 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
         }
         else {
             LOG_ERROR("uv_accept: %s(%s)", uv_strerror(ret), uv_err_name(ret));
+            if (tcpServer->errorCallback_ != NULL) {
+                tcpServer->errorCallback_(NULL, ret, "uv_accept error");
+            }
+            free(client);
         }
     }
 }
