@@ -5,6 +5,8 @@
 #include "EventLoop.h"
 #include "EventLoopThreadPool.h"
 #include "SockAddr.h"
+#include "TcpConnection.h"
+#include "ThreadLocal.h"
 #include <uv.h>
 #include <functional>
 #include <map>
@@ -16,13 +18,13 @@ class TcpServer
 public:
     typedef std::function<void(EventLoop*)> ThreadInitCallback;
 
-    typedef void (*ConnectionCallback)(uv_tcp_t *client);
+    typedef void (*ConnectionCallback)(TcpConnectionPtr &conn);
 
-    typedef void (*MessageCallback)(uv_tcp_t *client, char *buffer, int len);
+    typedef void (*MessageCallback)(TcpConnectionPtr &conn);
 
-    typedef void (*ErrorCallback)(uv_tcp_t *client, int errcode, const std::string &errmsg);
+    typedef void (*ErrorCallback)(int errcode, const std::string &errmsg);
 
-    typedef void (*WriteCompleteCallback)(uv_tcp_t *client);
+    typedef void (*WriteCompleteCallback)(TcpConnectionPtr &conn);
 
     TcpServer(EventLoop *loop);
 
@@ -81,6 +83,10 @@ private:
     ErrorCallback errorCallback_;
 
     WriteCompleteCallback writeCompleteCallback_;
+
+    ThreadLocal<std::map<size_t, TcpConnectionPtr>> connectionMap_;
+
+    static const size_t ACCEPT_MAX = 10;
 };
 
 NAMESPACE_END

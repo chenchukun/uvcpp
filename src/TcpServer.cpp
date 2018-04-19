@@ -1,6 +1,8 @@
 #include "TcpServer.h"
 #include "EventLoop.h"
 
+using namespace std;
+
 NAMESPACE_START
 
 TcpServer::TcpServer(EventLoop *loop)
@@ -53,35 +55,56 @@ void TcpServer::closeCallback(uv_handle_t* handle)
 
 void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
 {
+    TcpServer *tcpServer = static_cast<TcpServer*>(server->data);
+
     if (status != 0) {
         LOG_ERROR("newConnectionCallback: %s(%s)", uv_strerror(status), uv_err_name(status));
+        if (tcpServer->errorCallback_ != NULL) {
+            tcpServer->errorCallback_(status, "uv_listen error");
+        }
         return;
     }
-    TcpServer *tcpServer = static_cast<TcpServer*>(server->data);
-    for (int i=0; i<10; ++i) {
+    for (size_t i=0; i<ACCEPT_MAX; ++i) {
         uv_tcp_t *client = static_cast<uv_tcp_t*>(malloc(sizeof(uv_tcp_t)));
         uv_tcp_init(tcpServer->eventLoop_->getLoop(), client);
+
         int ret = uv_accept(server, reinterpret_cast<uv_stream_t*>(client));
         if (ret == 0) {
+            size_t id = tcpServer->connectionId_;
+            tcpServer->connectionId_++;
+
+            ret = uv_read_start(reinterpret_cast<uv_stream_t*>(client),
+                TcpConnection::allocCallback, TcpConnection::readCallback);
+            if (ret != 0) {
+                uv_close((uv_handle_t*)client, TcpServer::closeCallback);
+                LOG_ERROR("uv_read_start: %s(%s)", uv_strerror(ret), uv_err_name(ret));
+                if (tcpServer->errorCallback_ != NULL) {
+                    tcpServer->errorCallback_(ret, "uv_read_start error");
+                }
+                continue;
+            }
+
             if (tcpServer->eventLoopThreadPool_ != NULL) {
-                size_t id = tcpServer->connectionId_;
-                tcpServer->connectionId_++;
                 EventLoop *loop = tcpServer->eventLoopThreadPool_->getLoop(id);
                 uv_unref(reinterpret_cast<uv_handle_t*>(client));
                 ConnectionCallback callback = tcpServer->connectionCallback_;
-                loop->runInLoopThread([client, callback, id]{
+
+                loop->runInLoopThread([tcpServer, client, callback, id]{
                     client->loop = EventLoop::getCurrThreadEventLoop()->getLoop();
                     uv_ref(reinterpret_cast<uv_handle_t*>(client));
-                    // call connectionCallback
+                    TcpConnectionPtr conn = make_shared<TcpConnection>(client);
+                    tcpServer->connectionMap_.value()[id] = conn;
+
                     if (callback != NULL) {
-                        callback(client);
+                        callback(conn);
                     }
                 });
             }
             else {
-                // call connectionCallback
+                TcpConnectionPtr conn = make_shared<TcpConnection>(client);
+
                 if (tcpServer->connectionCallback_ != NULL) {
-                    tcpServer->connectionCallback_(client);
+                    tcpServer->connectionCallback_(conn);
                 }
             }
         }
@@ -92,7 +115,7 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
         else {
             LOG_ERROR("uv_accept: %s(%s)", uv_strerror(ret), uv_err_name(ret));
             if (tcpServer->errorCallback_ != NULL) {
-                tcpServer->errorCallback_(NULL, ret, "uv_accept error");
+                tcpServer->errorCallback_(ret, "uv_accept error");
             }
             free(client);
         }
