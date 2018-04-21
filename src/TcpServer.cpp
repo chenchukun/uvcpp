@@ -92,17 +92,26 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
                 loop->runInLoopThread([tcpServer, client, callback, id]{
                     client->loop = EventLoop::getCurrThreadEventLoop()->getLoop();
                     uv_ref(reinterpret_cast<uv_handle_t*>(client));
-                    TcpConnectionPtr conn = make_shared<TcpConnection>(client);
+                    TcpConnectionPtr conn = make_shared<TcpConnection>(EventLoop::getCurrThreadEventLoop(), client, id);
+                    conn->setMessageCallback(tcpServer->messageCallback_);
+                    conn->setErrorCallback(tcpServer->errorCallback_);
+                    conn->setWriteCompleteCallback(tcpServer->writeCompleteCallback_);
                     tcpServer->connectionMap_.value()[id] = conn;
-
+                    weak_ptr<TcpConnection> *weakPtr = new weak_ptr<TcpConnection>(conn);
+                    client->data = static_cast<void*>(weakPtr);
                     if (callback != NULL) {
                         callback(conn);
                     }
                 });
             }
             else {
-                TcpConnectionPtr conn = make_shared<TcpConnection>(client);
-
+                TcpConnectionPtr conn = make_shared<TcpConnection>(EventLoop::getCurrThreadEventLoop(), client, id);
+                conn->setMessageCallback(tcpServer->messageCallback_);
+                conn->setErrorCallback(tcpServer->errorCallback_);
+                conn->setWriteCompleteCallback(tcpServer->writeCompleteCallback_);
+                tcpServer->connectionMap_.value()[id] = conn;
+                weak_ptr<TcpConnection> *weakPtr = new weak_ptr<TcpConnection>(conn);
+                client->data = static_cast<void*>(weakPtr);
                 if (tcpServer->connectionCallback_ != NULL) {
                     tcpServer->connectionCallback_(conn);
                 }

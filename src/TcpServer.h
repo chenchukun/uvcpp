@@ -7,6 +7,7 @@
 #include "SockAddr.h"
 #include "TcpConnection.h"
 #include "ThreadLocal.h"
+#include "Callbacks.h"
 #include <uv.h>
 #include <functional>
 #include <map>
@@ -16,15 +17,6 @@ NAMESPACE_START
 class TcpServer
 {
 public:
-    typedef std::function<void(EventLoop*)> ThreadInitCallback;
-
-    typedef void (*ConnectionCallback)(TcpConnectionPtr &conn);
-
-    typedef void (*MessageCallback)(TcpConnectionPtr &conn);
-
-    typedef void (*ErrorCallback)(int errcode, const std::string &errmsg);
-
-    typedef void (*WriteCompleteCallback)(TcpConnectionPtr &conn);
 
     TcpServer(EventLoop *loop);
 
