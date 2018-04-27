@@ -30,30 +30,40 @@ public:
         threadNum_ = num;
     }
 
-    void setThreadInitCallback(EventLoopThreadPool::ThreadInitCallback callback) {
+    void setThreadInitCallback(const EventLoopThreadPool::ThreadInitCallback &callback) {
         threadInitCallback_ = callback;
     }
 
-    void setConnectionCallback(ConnectionCallback callback) {
+    void setConnectionCallback(const ConnectionCallback &callback) {
         connectionCallback_ = callback;
     }
 
-    void setMessageCallback(MessageCallback callback) {
+    void setMessageCallback(const MessageCallback &callback) {
         messageCallback_ = callback;
     }
 
-    void setErrorCallback(ErrorCallback callback) {
+    void setErrorCallback(const ErrorCallback &callback) {
         errorCallback_ = callback;
     }
 
-    void setWriteCompleteCallback(WriteCompleteCallback callback) {
+    void setWriteCompleteCallback(const WriteCompleteCallback &callback) {
         writeCompleteCallback_ = callback;
     }
+
+    // debug
+    std::map<std::string, std::vector<TcpConnectionPtr>> getAllConnection();
 
 private:
     static void newConnectionCallback(uv_stream_t* server, int status);
 
     static void closeCallback(uv_handle_t* handle);
+
+    void removeConnection(const TcpConnectionPtr &conn) {
+        size_t id = conn->id();
+        connectionMap_.value().erase(id);
+    }
+
+    std::pair<std::string, std::vector<TcpConnectionPtr>> getConnection(const std::string name, const std::map<size_t, TcpConnectionPtr> &cmap);
 
 private:
     size_t connectionId_;

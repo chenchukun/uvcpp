@@ -1,5 +1,6 @@
 #include "TcpServer.h"
 #include "EventLoop.h"
+#include "BlockingQueue.h"
 
 using namespace std;
 
@@ -93,9 +94,11 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
                     client->loop = EventLoop::getCurrThreadEventLoop()->getLoop();
                     uv_ref(reinterpret_cast<uv_handle_t*>(client));
                     TcpConnectionPtr conn = make_shared<TcpConnection>(EventLoop::getCurrThreadEventLoop(), client, id);
+                    conn->setConnectionCallback(tcpServer->connectionCallback_);
                     conn->setMessageCallback(tcpServer->messageCallback_);
                     conn->setErrorCallback(tcpServer->errorCallback_);
                     conn->setWriteCompleteCallback(tcpServer->writeCompleteCallback_);
+                    conn->setCloseCallback(bind(&TcpServer::removeConnection, tcpServer, std::placeholders::_1));
                     tcpServer->connectionMap_.value()[id] = conn;
                     weak_ptr<TcpConnection> *weakPtr = new weak_ptr<TcpConnection>(conn);
                     client->data = static_cast<void*>(weakPtr);
@@ -106,9 +109,11 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
             }
             else {
                 TcpConnectionPtr conn = make_shared<TcpConnection>(EventLoop::getCurrThreadEventLoop(), client, id);
+                conn->setConnectionCallback(tcpServer->connectionCallback_);
                 conn->setMessageCallback(tcpServer->messageCallback_);
                 conn->setErrorCallback(tcpServer->errorCallback_);
                 conn->setWriteCompleteCallback(tcpServer->writeCompleteCallback_);
+                conn->setCloseCallback(bind(&TcpServer::removeConnection, tcpServer, std::placeholders::_1));
                 tcpServer->connectionMap_.value()[id] = conn;
                 weak_ptr<TcpConnection> *weakPtr = new weak_ptr<TcpConnection>(conn);
                 client->data = static_cast<void*>(weakPtr);
@@ -129,6 +134,43 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
             free(client);
         }
     }
+}
+
+map<string, vector<TcpConnectionPtr>> TcpServer::getAllConnection()
+{
+    BlockingQueue<pair<string, vector<TcpConnectionPtr>>> que;
+    size_t num = 0;
+    if (eventLoopThreadPool_ == NULL) {
+        eventLoop_->runInLoopThread([this, &que] {
+            que.put(getConnection("MainLoop", this->connectionMap_.value()));
+        });
+        num = 1;
+    }
+    else {
+        vector<EventLoop*> loops = eventLoopThreadPool_->getAllLoops();
+        for (size_t i=0; i<loops.size(); ++i) {
+            loops[i]->runInLoopThread([this, &que, i] {
+                que.put(getConnection("ChildLoop_" + to_string(i), this->connectionMap_.value()));
+            });
+        }
+        num = loops.size();
+    }
+    map<string, vector<TcpConnectionPtr>> results;
+    for (size_t i=0; i<num; ++i) {
+        auto value = que.take();
+        results[value.first] = value.second;
+    }
+    return results;
+}
+
+pair<string, vector<TcpConnectionPtr>> TcpServer::getConnection(const string name, const map<size_t, TcpConnectionPtr> &cmap)
+{
+    vector<TcpConnectionPtr> conns;
+    map<size_t, TcpConnectionPtr>::const_iterator it = cmap.cbegin();
+    while (it != cmap.cend()) {
+        conns.push_back(it->second);
+    }
+    return make_pair(name, conns);
 }
 
 NAMESPACE_END

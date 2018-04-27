@@ -3,6 +3,7 @@
 
 #include "utility.h"
 #include <functional>
+#include <memory>
 NAMESPACE_START
 
 class TcpConnection;
@@ -11,15 +12,15 @@ class EventLoop;
 
 typedef std::shared_ptr<TcpConnection> TcpConnectionPtr;
 
-typedef void (*ConnectionCallback)(TcpConnectionPtr &conn);
+typedef std::function<void(TcpConnectionPtr &conn)> ConnectionCallback;
 
-typedef void (*MessageCallback)(TcpConnectionPtr &conn, char *buff, int len);
+typedef std::function<void(TcpConnectionPtr &conn, char *buff, int len)> MessageCallback;
 
-typedef void (*ErrorCallback)(int errcode, const std::string &errmsg);
+typedef std::function<void(int errcode, const std::string &errmsg)> ErrorCallback;
 
-typedef void (*WriteCompleteCallback)(TcpConnectionPtr &conn);
+typedef std::function<void(TcpConnectionPtr &conn)> WriteCompleteCallback;
 
-typedef void (*CloseCallback)(const TcpConnectionPtr &conn);
+typedef std::function<void(const TcpConnectionPtr &conn)> CloseCallback;
 
 typedef std::function<void(EventLoop*)> ThreadInitCallback;
 

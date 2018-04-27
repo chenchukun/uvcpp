@@ -13,6 +13,7 @@ NAMESPACE_START
 class TcpConnection : public std::enable_shared_from_this<TcpConnection>
 {
 public:
+    // 连接状态、主动关闭发送了FIN、被动关闭接收到FIN、关闭
     typedef enum {CONNECTED, FIN_WAIT, CLOSE_WAIT, CLOSED} ConnectionState;
 
     TcpConnection(EventLoop *loop, uv_tcp_t *client, size_t id)
@@ -28,25 +29,25 @@ public:
 
     }
 
-    ~TcpConnection() {}
+    ~TcpConnection();
 
-    void setConnectionCallback(ConnectionCallback callback) {
+    void setConnectionCallback(const ConnectionCallback &callback) {
         connectionCallback_ = callback;
     }
 
-    void setMessageCallback(MessageCallback callback) {
+    void setMessageCallback(const MessageCallback &callback) {
         messageCallback_ = callback;
     }
 
-    void setErrorCallback(ErrorCallback callback) {
+    void setErrorCallback(const ErrorCallback &callback) {
         errorCallback_ = callback;
     }
 
-    void setWriteCompleteCallback(WriteCompleteCallback callback) {
+    void setWriteCompleteCallback(const WriteCompleteCallback &callback) {
         writeCompleteCallback_ = callback;
     }
 
-    void setCloseCallback(CloseCallback callback) {
+    void setCloseCallback(const CloseCallback &callback) {
         closeCallback_ = callback;
     }
 
@@ -66,6 +67,8 @@ public:
         return state_ == CONNECTED;
     }
 
+    void shutdown();
+
     void send(std::string &&str);
 
 public:
@@ -74,6 +77,10 @@ public:
     static void allocCallback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf);
 
     static void closeCallback(uv_handle_t* handle);
+
+    static void shutdownCallback(uv_shutdown_t* handle, int status);
+
+    void shutdownWrite();
 
 private:
     enum BUF_TYPE {BUF_STD_STRING};

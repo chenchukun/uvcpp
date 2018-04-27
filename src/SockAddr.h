@@ -54,7 +54,7 @@ public:
 			uv_ip6_name(addr, buff, sizeof(buff));
 			port = ntohs(addr->sin6_port);
 		}
-		return std::string(buff) + std::to_string(port);
+		return std::string(buff) + ":" + std::to_string(port);
 	}
 
 	u_short getPort() const {
