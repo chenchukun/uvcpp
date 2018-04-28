@@ -54,6 +54,20 @@ void TcpServer::closeCallback(uv_handle_t* handle)
     free(handle);
 }
 
+bool TcpServer::startRead(uv_tcp_t *client, TcpServer *tcpServer)
+{
+    int ret = uv_read_start(reinterpret_cast<uv_stream_t*>(client),
+                        TcpConnection::allocCallback, TcpConnection::readCallback);
+    if (ret != 0) {
+        uv_close((uv_handle_t*)client, TcpServer::closeCallback);
+        if (tcpServer->errorCallback_ != NULL) {
+            tcpServer->errorCallback_(ret, "uv_read_start error");
+        }
+        return false;
+    }
+    return true;
+}
+
 void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
 {
     TcpServer *tcpServer = static_cast<TcpServer*>(server->data);
@@ -74,17 +88,6 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
             size_t id = tcpServer->connectionId_;
             tcpServer->connectionId_++;
 
-            ret = uv_read_start(reinterpret_cast<uv_stream_t*>(client),
-                TcpConnection::allocCallback, TcpConnection::readCallback);
-            if (ret != 0) {
-                uv_close((uv_handle_t*)client, TcpServer::closeCallback);
-                LOG_ERROR("uv_read_start: %s(%s)", uv_strerror(ret), uv_err_name(ret));
-                if (tcpServer->errorCallback_ != NULL) {
-                    tcpServer->errorCallback_(ret, "uv_read_start error");
-                }
-                continue;
-            }
-
             if (tcpServer->eventLoopThreadPool_ != NULL) {
                 EventLoop *loop = tcpServer->eventLoopThreadPool_->getLoop(id);
                 uv_unref(reinterpret_cast<uv_handle_t*>(client));
@@ -93,6 +96,9 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
                 loop->runInLoopThread([tcpServer, client, callback, id]{
                     client->loop = EventLoop::getCurrThreadEventLoop()->getLoop();
                     uv_ref(reinterpret_cast<uv_handle_t*>(client));
+                    if (!startRead(client, tcpServer)) {
+                        return;
+                    }
                     TcpConnectionPtr conn = make_shared<TcpConnection>(EventLoop::getCurrThreadEventLoop(), client, id);
                     conn->setConnectionCallback(tcpServer->connectionCallback_);
                     conn->setMessageCallback(tcpServer->messageCallback_);
@@ -108,6 +114,9 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
                 });
             }
             else {
+                if (!startRead(client, tcpServer)) {
+                    continue;
+                }
                 TcpConnectionPtr conn = make_shared<TcpConnection>(EventLoop::getCurrThreadEventLoop(), client, id);
                 conn->setConnectionCallback(tcpServer->connectionCallback_);
                 conn->setMessageCallback(tcpServer->messageCallback_);
@@ -169,6 +178,7 @@ pair<string, vector<TcpConnectionPtr>> TcpServer::getConnection(const string nam
     map<size_t, TcpConnectionPtr>::const_iterator it = cmap.cbegin();
     while (it != cmap.cend()) {
         conns.push_back(it->second);
+        ++it;
     }
     return make_pair(name, conns);
 }

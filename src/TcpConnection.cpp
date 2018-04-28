@@ -47,6 +47,7 @@ void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_bu
         // 若此时用户不拥有该连接,则连接将析构,
         // 否则可以继续发送数据直到调用shutdown()
         conn->closeCallback_(conn);
+        uv_read_stop(stream);
     }
     else if (nread > 0){
         conn->messageCallback_(conn, conn->buff_, nread);
@@ -84,14 +85,6 @@ void TcpConnection::closeCallback(uv_handle_t* handle)
 
 void TcpConnection::shutdownCallback(uv_shutdown_t* handle, int status)
 {
-    weak_ptr<TcpConnection> *weak = static_cast<weak_ptr<TcpConnection>*>(handle->data);
-    if (status != 0) {
-        TcpConnectionPtr conn = weak->lock();
-        if (conn) {
-            conn->errorCallback_(status, uv_strerror(status));
-        }
-    }
-    delete weak;
     free(handle);
 }
 
@@ -99,7 +92,6 @@ void TcpConnection::shutdownWrite()
 {
     state_ = state_ == CONNECTED? FIN_WAIT: CLOSED;
     uv_shutdown_t *req = static_cast<uv_shutdown_t*>(malloc(sizeof(uv_shutdown_t)));
-    req->data = static_cast<void*>(new weak_ptr<TcpConnection>(shared_from_this()));
     uv_tcp_t *client = client_;
     eventLoop_->runInLoopThread([client, req] {
         uv_shutdown(req, reinterpret_cast<uv_stream_t*>(client), TcpConnection::shutdownCallback);

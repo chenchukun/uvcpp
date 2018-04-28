@@ -58,6 +58,8 @@ private:
 
     static void closeCallback(uv_handle_t* handle);
 
+    static bool startRead(uv_tcp_t *client, TcpServer *tcpServer);
+
     void removeConnection(const TcpConnectionPtr &conn) {
         size_t id = conn->id();
         connectionMap_.value().erase(id);
