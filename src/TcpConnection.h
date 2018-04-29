@@ -5,6 +5,7 @@
 #include "SockAddr.h"
 #include "Callbacks.h"
 #include <string>
+#include <vector>
 #include <uv.h>
 #include <memory>
 
@@ -62,7 +63,9 @@ public:
 
     void shutdown();
 
-    void send(std::string &&str);
+    void send(const std::string &str);
+
+    void send(const void *ptr, size_t len);
 
 public:
     static void readCallback(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
@@ -70,17 +73,6 @@ public:
     static void allocCallback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf);
 
 private:
-    enum BUF_TYPE {BUF_STD_STRING};
-
-    struct WriteContext {
-        uv_buf_t *buf;
-        BUF_TYPE buffType;
-        union {
-            std::string str;
-        };
-        std::shared_ptr<TcpConnection> conn;
-    };
-
     static const size_t BUF_SIZE = 1024;
 
     void shutdownWrite();
@@ -88,6 +80,8 @@ private:
     static void closeCallback(uv_handle_t* handle);
 
     static void shutdownCallback(uv_shutdown_t* handle, int status=0);
+
+    static void writeCallback(uv_write_t* req, int status);
 
 private:
     uv_tcp_t *client_;
@@ -111,6 +105,40 @@ private:
     CloseCallback closeCallback_;
 
     SockAddr peerAddr_, localAddr_;
+
+private:
+    enum BUF_TYPE {BUF_STD_STRING, BUF_VOID_PTR};
+
+    struct WriteContext
+    {
+        WriteContext(const TcpConnectionPtr &c, const std::string &s)
+            : str(move(s)),
+              conn(c),
+              buffType(BUF_STD_STRING)
+        {
+            bufs.push_back(uv_buf_t());
+            bufs.back().base = const_cast<char*>(str.data());
+            bufs.back().len = str.size();
+        }
+
+        WriteContext(const TcpConnectionPtr &c, const void *p, size_t len)
+            : ptr(p),
+              conn(c),
+              buffType(BUF_VOID_PTR)
+        {
+            bufs.push_back(uv_buf_t());
+            bufs.back().base = static_cast<char*>(const_cast<void*>(p));
+            bufs.back().len = len;
+        }
+
+        std::vector<uv_buf_t> bufs;
+        BUF_TYPE buffType;
+        union {
+            const std::string str;
+            const void *ptr;
+        };
+        TcpConnectionPtr conn;
+    };
 };
 
 

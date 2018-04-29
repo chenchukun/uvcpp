@@ -16,10 +16,14 @@ int main()
     });
     server.setMessageCallback([] (TcpConnectionPtr &conn, char *buff, int len) {
         buff[len] = 0;
+        conn->send(buff);
         cout << "Recv: " << buff << endl;
         if (strncmp(buff, "shutdown", 8) == 0) {
             conn->shutdown();
         }
+    });
+    server.setWriteCompleteCallback([] (TcpConnectionPtr &conn) {
+        cout << "Send data to " << conn->getPeerAddr().getIpPort() << " finish" << endl;
     });
     int ret = server.start(SockAddr(6180));
     if (ret != 0) {

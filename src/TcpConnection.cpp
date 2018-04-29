@@ -112,4 +112,41 @@ void TcpConnection::shutdown()
     }
 }
 
+void TcpConnection::writeCallback(uv_write_t* req, int status)
+{
+    WriteContext *context = static_cast<WriteContext*>(req->data);
+    if (status == 0) {
+        auto &callback = context->conn->writeCompleteCallback_;
+        if (callback != NULL) {
+            callback(context->conn);
+        }
+    }
+    if (context->buffType == BUF_VOID_PTR) {
+        free(const_cast<void*>(context->ptr));
+    }
+    free(req);
+}
+
+void TcpConnection::send(const std::string &str)
+{
+    uv_write_t *wreq = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
+    WriteContext *context = new WriteContext(shared_from_this(), str);
+    wreq->data = static_cast<void*>(context);
+    uv_stream_t *stream = reinterpret_cast<uv_stream_t*>(client_);
+    eventLoop_->runInLoopThread([wreq, context, stream] {
+        uv_write(wreq, stream, context->bufs.data(), context->bufs.size(), TcpConnection::writeCallback);
+    });
+}
+
+void TcpConnection::send(const void *ptr, size_t len)
+{
+    uv_write_t *wreq = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
+    WriteContext *context = new WriteContext(shared_from_this(), ptr, len);
+    wreq->data = static_cast<void*>(context);
+    uv_stream_t *stream = reinterpret_cast<uv_stream_t*>(client_);
+    eventLoop_->runInLoopThread([wreq, context, stream] {
+        uv_write(wreq, stream, context->bufs.data(), context->bufs.size(), TcpConnection::writeCallback);
+    });
+}
+
 NAMESPACE_END
