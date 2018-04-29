@@ -76,6 +76,10 @@ private:
 
     static void closeCallback(uv_handle_t* handle);
 
+    static void signalCallback(uv_signal_t *handle, int signum) {
+
+    }
+
     uv_timer_t* timerRunImpl(Timeval time, uint64_t interval, TimerCallback cb);
 
 private:
@@ -88,6 +92,8 @@ private:
     bool run_;
 
     Any data_;
+
+    uv_signal_t *signal_;
 };
 
 NAMESPACE_END

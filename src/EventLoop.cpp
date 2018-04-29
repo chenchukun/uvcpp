@@ -10,7 +10,8 @@ NAMESPACE_START
 __thread EventLoop *currEventLoop = NULL;
 
 EventLoop::EventLoop()
-    : run_(true)
+    : run_(true),
+      signal_(NULL)
 {
     threadId_ = std::this_thread::get_id();
     assert(currEventLoop == NULL);
@@ -18,12 +19,17 @@ EventLoop::EventLoop()
     uv_loop_init(loop_);
     assert(currEventLoop == NULL);
     currEventLoop = this;
+    signal_ = (uv_signal_t*)malloc(sizeof(uv_signal_t));
+    uv_signal_init(loop_, signal_);
+    uv_signal_start(signal_, EventLoop::signalCallback, SIGPIPE);
 }
 
 EventLoop::~EventLoop()
 {
     uv_loop_close(loop_);
     free(loop_);
+    uv_signal_stop(signal_);
+    free(signal_);
 }
 
 void EventLoop::stop()
