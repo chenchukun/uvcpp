@@ -16,18 +16,7 @@ public:
     // 连接状态、主动关闭发送了FIN、被动关闭接收到FIN、关闭
     typedef enum {CONNECTED, FIN_WAIT, CLOSE_WAIT, CLOSED} ConnectionState;
 
-    TcpConnection(EventLoop *loop, uv_tcp_t *client, size_t id)
-        : eventLoop_(loop),
-          client_(client),
-          state_(CONNECTED),
-          messageCallback_(NULL),
-          errorCallback_(NULL),
-          writeCompleteCallback_(NULL),
-          closeCallback_(NULL),
-          id_(id)
-    {
-
-    }
+    TcpConnection(EventLoop *loop, uv_tcp_t *client, size_t id);
 
     ~TcpConnection();
 
@@ -55,9 +44,13 @@ public:
         return id_;
     }
 
-    std::shared_ptr<SockAddr> getPeerAddr() const ;
+    const SockAddr& getPeerAddr() const {
+        return peerAddr_;
+    }
 
-    std::shared_ptr<SockAddr> getLocalAddr() const;
+    const SockAddr& getLocalAddr() const {
+        return localAddr_;
+    }
 
     ConnectionState getConnectionState() const {
         return state_;
@@ -76,12 +69,6 @@ public:
 
     static void allocCallback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf);
 
-    static void closeCallback(uv_handle_t* handle);
-
-    static void shutdownCallback(uv_shutdown_t* handle, int status);
-
-    void shutdownWrite();
-
 private:
     enum BUF_TYPE {BUF_STD_STRING};
 
@@ -95,6 +82,12 @@ private:
     };
 
     static const size_t BUF_SIZE = 1024;
+
+    void shutdownWrite();
+
+    static void closeCallback(uv_handle_t* handle);
+
+    static void shutdownCallback(uv_shutdown_t* handle, int status=0);
 
 private:
     uv_tcp_t *client_;
@@ -116,6 +109,8 @@ private:
     WriteCompleteCallback writeCompleteCallback_;
 
     CloseCallback closeCallback_;
+
+    SockAddr peerAddr_, localAddr_;
 };
 
 

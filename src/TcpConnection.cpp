@@ -4,33 +4,36 @@
 using namespace std;
 NAMESPACE_START
 
+
+TcpConnection::TcpConnection(EventLoop *loop, uv_tcp_t *client, size_t id)
+    : eventLoop_(loop),
+    client_(client),
+    state_(CONNECTED),
+    messageCallback_(NULL),
+    errorCallback_(NULL),
+    writeCompleteCallback_(NULL),
+    closeCallback_(NULL),
+    id_(id)
+{
+    int len = peerAddr_.getAddrLength();
+    int ret = uv_tcp_getsockname(client_, localAddr_.getAddr(), &len);
+    assert(ret == 0);
+    ret = uv_tcp_getpeername(client_, peerAddr_.getAddr(), &len);
+    assert(ret == 0);
+}
+
 TcpConnection::~TcpConnection()
 {
     if (state_ == CLOSE_WAIT) {
         shutdownWrite();
     }
-}
-
-shared_ptr<SockAddr> TcpConnection::getLocalAddr() const
-{
-    std::shared_ptr<SockAddr> paddr = make_shared<SockAddr>();
-    int len = paddr->getAddrLength();
-    int ret = uv_tcp_getsockname(client_, paddr->getAddr(), &len);
-    if (ret != 0) {
-        return NULL;
+    else {
+        state_ = CLOSED;
+        uv_tcp_t *client = client_;
+        eventLoop_->runInLoopThread([client] {
+           uv_close(reinterpret_cast<uv_handle_t*>(client), TcpConnection::closeCallback);
+        });
     }
-    return paddr;
-}
-
-shared_ptr<SockAddr> TcpConnection::getPeerAddr() const
-{
-    std::shared_ptr<SockAddr> paddr = make_shared<SockAddr>();
-    int len = paddr->getAddrLength();
-    int ret = uv_tcp_getpeername(client_, paddr->getAddr(), &len);
-    if (ret != 0) {
-        return NULL;
-    }
-    return paddr;
 }
 
 void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
@@ -43,11 +46,11 @@ void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_bu
         // 更新连接状态
         conn->state_ = conn->state_==CONNECTED? CLOSE_WAIT: CLOSED;
         conn->connectionCallback_(conn);
+        uv_read_stop(stream);
         // 调用closeCallback,从TcpServer中删除该连接,这里不需要调用runInThread
         // 若此时用户不拥有该连接,则连接将析构,
         // 否则可以继续发送数据直到调用shutdown()
         conn->closeCallback_(conn);
-        uv_read_stop(stream);
     }
     else if (nread > 0){
         conn->messageCallback_(conn, conn->buff_, nread);
@@ -73,26 +76,24 @@ void TcpConnection::allocCallback(uv_handle_t* handle, size_t suggested_size, uv
 
 void TcpConnection::closeCallback(uv_handle_t* handle)
 {
-    weak_ptr<TcpConnection> *weak = static_cast<weak_ptr<TcpConnection>*>(handle->data);
-    TcpConnectionPtr conn = weak->lock();
-    assert(conn != NULL);
-    conn->eventLoop_->runInLoopThread([conn] {
-        conn->closeCallback_(conn);
-    });
-    delete weak;
     free(handle);
 }
 
 void TcpConnection::shutdownCallback(uv_shutdown_t* handle, int status)
 {
     free(handle);
+    uv_tcp_t *client = static_cast<uv_tcp_t*>(handle->data);
+    if (client != NULL) {
+        uv_close(reinterpret_cast<uv_handle_t*>(client), TcpConnection::closeCallback);
+    }
 }
 
 void TcpConnection::shutdownWrite()
 {
-    state_ = state_ == CONNECTED? FIN_WAIT: CLOSED;
+    state_ = CLOSED;
     uv_shutdown_t *req = static_cast<uv_shutdown_t*>(malloc(sizeof(uv_shutdown_t)));
     uv_tcp_t *client = client_;
+    req->data = client;
     eventLoop_->runInLoopThread([client, req] {
         uv_shutdown(req, reinterpret_cast<uv_stream_t*>(client), TcpConnection::shutdownCallback);
     });
@@ -100,8 +101,14 @@ void TcpConnection::shutdownWrite()
 
 void TcpConnection::shutdown()
 {
-    if (state_ != FIN_WAIT && state_ != CLOSED) {
-        shutdownWrite();
+    if (state_ == CONNECTED) {
+        state_ = FIN_WAIT;
+        uv_shutdown_t *req = static_cast<uv_shutdown_t*>(malloc(sizeof(uv_shutdown_t)));
+        uv_tcp_t *client = client_;
+        req->data = NULL;
+        eventLoop_->runInLoopThread([client, req] {
+            uv_shutdown(req, reinterpret_cast<uv_stream_t*>(client), TcpConnection::shutdownCallback);
+        });
     }
 }
 
