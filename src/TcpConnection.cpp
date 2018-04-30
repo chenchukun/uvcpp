@@ -1,6 +1,5 @@
 #include "TcpConnection.h"
 #include "EventLoop.h"
-
 using namespace std;
 NAMESPACE_START
 
@@ -13,6 +12,7 @@ TcpConnection::TcpConnection(EventLoop *loop, uv_tcp_t *client, size_t id)
     errorCallback_(NULL),
     writeCompleteCallback_(NULL),
     closeCallback_(NULL),
+    updateConnectionCallback_(NULL),
     id_(id)
 {
     int len = peerAddr_.getAddrLength();
@@ -38,7 +38,8 @@ TcpConnection::~TcpConnection()
 
 void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 {
-    TcpConnectionPtr conn = static_cast<weak_ptr<TcpConnection>*>(stream->data)->lock();
+    auto &data = *(static_cast<pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>*>(stream->data));
+    TcpConnectionPtr conn = data.first.lock();
     assert(conn != NULL);
     // 对端关闭连接
     if (nread == UV_EOF) {
@@ -53,6 +54,12 @@ void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_bu
         conn->closeCallback_(conn);
     }
     else if (nread > 0){
+        weak_ptr<Entry> &weakEntry = data.second;
+        shared_ptr<Entry> entryPtr = weakEntry.lock();
+        if (entryPtr != NULL) {
+            LOG_DEBUG("updateConnection");
+            conn->updateConnectionCallback_(entryPtr);
+        }
         conn->messageCallback_(conn, conn->buff_, nread);
     }
     else {
@@ -62,8 +69,8 @@ void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_bu
 
 void TcpConnection::allocCallback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 {
-    auto *connWeakPtr = static_cast<weak_ptr<TcpConnection>*>(handle->data);
-    TcpConnectionPtr conn = connWeakPtr->lock();
+    auto &data = *(static_cast<pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>*>(handle->data));
+    TcpConnectionPtr conn = data.first.lock();
     if (conn) {
         buf->base = conn->buff_;
         buf->len = TcpConnection::BUF_SIZE;

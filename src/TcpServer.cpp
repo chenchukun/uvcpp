@@ -16,7 +16,8 @@ TcpServer::TcpServer(EventLoop *loop)
       connectionId_(0),
       messageCallback_(NULL),
       errorCallback_(NULL),
-      writeCompleteCallback_(NULL)
+      writeCompleteCallback_(NULL),
+      timeout_(-1)
 {
 
 }
@@ -30,11 +31,30 @@ TcpServer::~TcpServer()
     }
 }
 
+void TcpServer::threadInit(EventLoop *eventLoop)
+{
+    if (timeout_ > 0) {
+        for (int i=0; i<timeout_; ++i) {
+            whell_.value().push(unordered_set<shared_ptr<Entry>>());
+        }
+        eventLoop->runEvery(1000, bind(&TcpServer::checkConnection, this));
+    }
+    if (threadInitCallback_ != NULL) {
+        threadInitCallback_(eventLoop);
+    }
+}
+
+void TcpServer::checkConnection()
+{
+    whell_.value().pop();
+    whell_.value().push(unordered_set<shared_ptr<Entry>>());
+}
+
 int TcpServer::start(const SockAddr &addr, int backlog)
 {
     if (threadNum_ > 0) {
         eventLoopThreadPool_ = new EventLoopThreadPool(threadNum_);
-        eventLoopThreadPool_->start(threadInitCallback_);
+        eventLoopThreadPool_->start(bind(&TcpServer::threadInit, this, placeholders::_1));
     }
     server_ = static_cast<uv_tcp_t*>(malloc(sizeof(uv_tcp_t)));
 
@@ -45,6 +65,13 @@ int TcpServer::start(const SockAddr &addr, int backlog)
     CHECK_ZERO_RETURN(uv_tcp_bind(server_, addr.getAddr(), 0));
 
     CHECK_ZERO_RETURN(uv_listen(reinterpret_cast<uv_stream_t*>(server_), backlog, TcpServer::newConnectionCallback));
+
+    if (timeout_ > 0) {
+        for (int i=0; i<timeout_; ++i) {
+            whell_.value().push(unordered_set<shared_ptr<Entry>>());
+        }
+        eventLoop_->runEvery(1000, bind(&TcpServer::checkConnection, this));
+    }
 
     return 0;
 }
@@ -105,9 +132,14 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
                     conn->setErrorCallback(tcpServer->errorCallback_);
                     conn->setWriteCompleteCallback(tcpServer->writeCompleteCallback_);
                     conn->setCloseCallback(bind(&TcpServer::removeConnection, tcpServer, std::placeholders::_1));
+                    conn->setUpdateConnectionCallback(bind(&TcpServer::updateConnection, tcpServer, placeholders::_1));
                     tcpServer->connectionMap_.value()[id] = conn;
-                    weak_ptr<TcpConnection> *weakPtr = new weak_ptr<TcpConnection>(conn);
-                    client->data = static_cast<void*>(weakPtr);
+                    shared_ptr<Entry> entry(new Entry(conn));
+                    tcpServer->whell_.value().back().insert(entry);
+                    weak_ptr<Entry> weakEntyp(entry);
+                    weak_ptr<TcpConnection> weakPtr(conn);
+                    auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weakEntyp);
+                    client->data = static_cast<void*>(data);
                     if (callback != NULL) {
                         callback(conn);
                     }
@@ -122,10 +154,15 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
                 conn->setMessageCallback(tcpServer->messageCallback_);
                 conn->setErrorCallback(tcpServer->errorCallback_);
                 conn->setWriteCompleteCallback(tcpServer->writeCompleteCallback_);
-                conn->setCloseCallback(bind(&TcpServer::removeConnection, tcpServer, std::placeholders::_1));
+                conn->setCloseCallback(bind(&TcpServer::removeConnection, tcpServer, placeholders::_1));
+                conn->setUpdateConnectionCallback(bind(&TcpServer::updateConnection, tcpServer, placeholders::_1));
                 tcpServer->connectionMap_.value()[id] = conn;
-                weak_ptr<TcpConnection> *weakPtr = new weak_ptr<TcpConnection>(conn);
-                client->data = static_cast<void*>(weakPtr);
+                shared_ptr<Entry> entry(new Entry(conn));
+                tcpServer->whell_.value().back().insert(entry);
+                weak_ptr<Entry> weakEntyp(entry);
+                weak_ptr<TcpConnection> weakPtr(conn);
+                auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weakEntyp);
+                client->data = static_cast<void*>(data);
                 if (tcpServer->connectionCallback_ != NULL) {
                     tcpServer->connectionCallback_(conn);
                 }

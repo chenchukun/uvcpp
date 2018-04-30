@@ -10,6 +10,7 @@ int main()
     EventLoop eventLoop;
     TcpServer server(&eventLoop);
     server.setThreadNum(4);
+    server.setTimeout(3);
     server.setConnectionCallback([](TcpConnectionPtr &conn) {
         cout << "Connection thread: " << this_thread::get_id() << endl;
         cout << conn->getPeerAddr().getIpPort() << (conn->connected()?" online": " offline") << endl;

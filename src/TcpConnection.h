@@ -41,6 +41,10 @@ public:
         closeCallback_ = callback;
     }
 
+    void setUpdateConnectionCallback(const UpdateConnectionCallback &callback) {
+        updateConnectionCallback_ = callback;
+    }
+
     size_t id() const {
         return id_;
     }
@@ -103,6 +107,8 @@ private:
     WriteCompleteCallback writeCompleteCallback_;
 
     CloseCallback closeCallback_;
+
+    UpdateConnectionCallback updateConnectionCallback_;
 
     SockAddr peerAddr_, localAddr_;
 

@@ -11,6 +11,8 @@
 #include <uv.h>
 #include <functional>
 #include <map>
+#include <unordered_set>
+#include <queue>
 
 NAMESPACE_START
 
@@ -50,6 +52,10 @@ public:
         writeCompleteCallback_ = callback;
     }
 
+    void setTimeout(int second) {
+        timeout_ = second;
+    }
+
     // debug
     std::map<std::string, std::vector<TcpConnectionPtr>> getAllConnection();
 
@@ -65,7 +71,15 @@ private:
         connectionMap_.value().erase(id);
     }
 
+    void updateConnection(std::shared_ptr<Entry> &entryPtr) {
+        whell_.value().back().insert(entryPtr);
+    }
+
     std::pair<std::string, std::vector<TcpConnectionPtr>> getConnection(const std::string name, const std::map<size_t, TcpConnectionPtr> &cmap);
+
+    void threadInit(EventLoop *eventLoop);
+
+    void checkConnection();
 
 private:
     size_t connectionId_;
@@ -91,6 +105,10 @@ private:
     ThreadLocal<std::map<size_t, TcpConnectionPtr>> connectionMap_;
 
     static const size_t ACCEPT_MAX = 10;
+
+    int timeout_;
+
+    ThreadLocal<std::queue<std::unordered_set<std::shared_ptr<Entry>>>> whell_;
 };
 
 NAMESPACE_END
