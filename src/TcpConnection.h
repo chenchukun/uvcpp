@@ -14,6 +14,8 @@ NAMESPACE_START
 class TcpConnection : public std::enable_shared_from_this<TcpConnection>
 {
 public:
+    friend class Entry;
+
     // 连接状态、主动关闭发送了FIN、被动关闭接收到FIN、关闭
     typedef enum {CONNECTED, FIN_WAIT, CLOSE_WAIT, CLOSED} ConnectionState;
 
@@ -43,6 +45,10 @@ public:
 
     void setUpdateConnectionCallback(const UpdateConnectionCallback &callback) {
         updateConnectionCallback_ = callback;
+    }
+
+    void setIdleTimeoutCallback(const IdleTimeoutCallback &callback) {
+        idleTimeoutCallback_ = callback;
     }
 
     size_t id() const {
@@ -109,6 +115,8 @@ private:
     CloseCallback closeCallback_;
 
     UpdateConnectionCallback updateConnectionCallback_;
+
+    IdleTimeoutCallback idleTimeoutCallback_;
 
     SockAddr peerAddr_, localAddr_;
 

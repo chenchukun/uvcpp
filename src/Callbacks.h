@@ -26,6 +26,8 @@ typedef std::function<void(const TcpConnectionPtr &conn)> CloseCallback;
 
 typedef std::function<void(EventLoop*)> ThreadInitCallback;
 
+typedef std::function<void(TcpConnectionPtr &conn)> IdleTimeoutCallback;
+
 struct Entry
 {
     Entry(const WeakTcpConnectionPtr &weakPtr)

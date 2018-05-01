@@ -14,6 +14,7 @@ TcpConnection::TcpConnection(EventLoop *loop, uv_tcp_t *client, size_t id)
     writeCompleteCallback_(NULL),
     closeCallback_(NULL),
     updateConnectionCallback_(NULL),
+    idleTimeoutCallback_(NULL),
     id_(id)
 {
     int len = peerAddr_.getAddrLength();
@@ -58,7 +59,6 @@ void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_bu
         weak_ptr<Entry> &weakEntry = data.second;
         shared_ptr<Entry> entryPtr = weakEntry.lock();
         if (entryPtr != NULL && conn->updateConnectionCallback_ != NULL) {
-            LOG_DEBUG("updateConnection");
             conn->updateConnectionCallback_(entryPtr);
         }
         conn->messageCallback_(conn, conn->buff_, nread);

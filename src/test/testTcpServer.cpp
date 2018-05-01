@@ -6,28 +6,33 @@ using namespace uvcpp;
 
 int main()
 {
-    cout << "main thread: " << this_thread::get_id() << endl;
     EventLoop eventLoop;
     TcpServer server(&eventLoop);
     server.setThreadNum(4);
-    server.setIdleTimeout(10);
+    /*
+    server.setIdleTimeoutCallback(20, [] (TcpConnectionPtr &conn) {
+        cout << "Connection [" << conn->getPeerAddr().getIpPort() << "] timeout\n";
+        conn->shutdown();
+    });
+     */
 
     server.setConnectionCallback([](TcpConnectionPtr &conn) {
-        cout << "Connection thread: " << this_thread::get_id() << endl;
         cout << conn->getPeerAddr().getIpPort() << (conn->connected()?" online": " offline") << endl;
     });
 
     server.setMessageCallback([] (TcpConnectionPtr &conn, char *buff, int len) {
         buff[len] = 0;
         conn->send(buff);
-        cout << "Recv: " << buff << endl;
+        /*
+        cout << "Recv " << len << " bytes" << endl;
         if (strncmp(buff, "shutdown", 8) == 0) {
             conn->shutdown();
         }
+         */
     });
 
     server.setWriteCompleteCallback([] (TcpConnectionPtr &conn) {
-        cout << "Send data to " << conn->getPeerAddr().getIpPort() << " finish" << endl;
+//j        cout << "Send data to " << conn->getPeerAddr().getIpPort() << " finish" << endl;
     });
 
     int ret = server.start(SockAddr(6180));

@@ -17,6 +17,7 @@ TcpServer::TcpServer(EventLoop *loop)
       messageCallback_(NULL),
       errorCallback_(NULL),
       writeCompleteCallback_(NULL),
+      idleTimeoutCallback_(NULL),
       timeout_(-1)
 {
 
@@ -141,6 +142,7 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
                         auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weakEntyp);
                         client->data = static_cast<void*>(data);
                         conn->setUpdateConnectionCallback(bind(&TcpServer::updateConnection, tcpServer, placeholders::_1));
+                        conn->setIdleTimeoutCallback(tcpServer->idleTimeoutCallback_);
                     }
                     else {
                         auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weak_ptr<Entry>(shared_ptr<Entry>()));
@@ -171,6 +173,7 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
                     auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weakEntyp);
                     client->data = static_cast<void*>(data);
                     conn->setUpdateConnectionCallback(bind(&TcpServer::updateConnection, tcpServer, placeholders::_1));
+                    conn->setIdleTimeoutCallback(tcpServer->idleTimeoutCallback_);
                 }
                 else {
                     auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weak_ptr<Entry>(shared_ptr<Entry>()));

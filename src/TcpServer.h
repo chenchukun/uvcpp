@@ -52,8 +52,9 @@ public:
         writeCompleteCallback_ = callback;
     }
 
-    void setIdleTimeout(int second) {
+    void setIdleTimeoutCallback(int second, const IdleTimeoutCallback &callback) {
         timeout_ = second;
+        idleTimeoutCallback_ = callback;
     }
 
     // debug
@@ -101,6 +102,8 @@ private:
     ErrorCallback errorCallback_;
 
     WriteCompleteCallback writeCompleteCallback_;
+
+    IdleTimeoutCallback idleTimeoutCallback_;
 
     ThreadLocal<std::map<size_t, TcpConnectionPtr>> connectionMap_;
 
