@@ -84,6 +84,8 @@ void TcpConnection::allocCallback(uv_handle_t* handle, size_t suggested_size, uv
 
 void TcpConnection::closeCallback(uv_handle_t* handle)
 {
+    auto *ptr = static_cast<pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>*>(handle->data);
+    delete ptr;
     free(handle);
 }
 

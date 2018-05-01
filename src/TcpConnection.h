@@ -83,7 +83,7 @@ public:
     static void allocCallback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf);
 
 private:
-    static const size_t BUF_SIZE = 1024;
+    static const size_t BUF_SIZE = 4096;
 
     void shutdownWrite();
 
@@ -126,7 +126,7 @@ private:
     struct WriteContext
     {
         WriteContext(const TcpConnectionPtr &c, const std::string &s)
-            : str(move(s)),
+            : str(std::move(s)),
               conn(c),
               buffType(BUF_STD_STRING)
         {
@@ -148,6 +148,10 @@ private:
         ~WriteContext() {
             if (buffType == BUF_VOID_PTR) {
                 free(const_cast<void*>(ptr));
+            }
+            else if (buffType == BUF_STD_STRING) {
+                // union中的对象无法正常析构,这里必须将对象移动到一个新的临时变量才可正常析构
+                std::string desStr(std::move(*(const_cast<std::string*>(&str))));
             }
         }
 

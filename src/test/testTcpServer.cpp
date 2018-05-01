@@ -9,12 +9,10 @@ int main()
     EventLoop eventLoop;
     TcpServer server(&eventLoop);
     server.setThreadNum(4);
-    /*
     server.setIdleTimeoutCallback(20, [] (TcpConnectionPtr &conn) {
         cout << "Connection [" << conn->getPeerAddr().getIpPort() << "] timeout\n";
         conn->shutdown();
     });
-     */
 
     server.setConnectionCallback([](TcpConnectionPtr &conn) {
         cout << conn->getPeerAddr().getIpPort() << (conn->connected()?" online": " offline") << endl;
