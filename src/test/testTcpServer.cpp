@@ -10,11 +10,13 @@ int main()
     EventLoop eventLoop;
     TcpServer server(&eventLoop);
     server.setThreadNum(4);
-    server.setTimeout(3);
+    server.setIdleTimeout(10);
+
     server.setConnectionCallback([](TcpConnectionPtr &conn) {
         cout << "Connection thread: " << this_thread::get_id() << endl;
         cout << conn->getPeerAddr().getIpPort() << (conn->connected()?" online": " offline") << endl;
     });
+
     server.setMessageCallback([] (TcpConnectionPtr &conn, char *buff, int len) {
         buff[len] = 0;
         conn->send(buff);
@@ -23,9 +25,11 @@ int main()
             conn->shutdown();
         }
     });
+
     server.setWriteCompleteCallback([] (TcpConnectionPtr &conn) {
         cout << "Send data to " << conn->getPeerAddr().getIpPort() << " finish" << endl;
     });
+
     int ret = server.start(SockAddr(6180));
     if (ret != 0) {
         cerr << "Start server failed: " << uv_strerror(ret) << endl;
@@ -34,6 +38,7 @@ int main()
     else {
         cout << "Start server success" << endl;
     }
+
     eventLoop.runEvery(10000, [&server] {
         auto connMap = server.getAllConnection();
         auto it = connMap.begin();
@@ -56,6 +61,7 @@ int main()
         }
         cout << "-----------------------------------------" << endl;
     });
+
     eventLoop.run();
     return 0;
 }

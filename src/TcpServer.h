@@ -52,7 +52,7 @@ public:
         writeCompleteCallback_ = callback;
     }
 
-    void setTimeout(int second) {
+    void setIdleTimeout(int second) {
         timeout_ = second;
     }
 

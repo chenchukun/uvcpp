@@ -1,5 +1,6 @@
 #include "TcpConnection.h"
 #include "EventLoop.h"
+#include <iostream>
 using namespace std;
 NAMESPACE_START
 
@@ -53,17 +54,17 @@ void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_bu
         // 否则可以继续发送数据直到调用shutdown()
         conn->closeCallback_(conn);
     }
-    else if (nread > 0){
+    else if (nread >= 0){
         weak_ptr<Entry> &weakEntry = data.second;
         shared_ptr<Entry> entryPtr = weakEntry.lock();
-        if (entryPtr != NULL) {
+        if (entryPtr != NULL && conn->updateConnectionCallback_ != NULL) {
             LOG_DEBUG("updateConnection");
             conn->updateConnectionCallback_(entryPtr);
         }
         conn->messageCallback_(conn, conn->buff_, nread);
     }
     else {
-        conn->errorCallback_(nread, uv_strerror(nread));
+       cerr << "read error: " << nread <<  uv_strerror(nread) << endl;
     }
 }
 
@@ -88,8 +89,8 @@ void TcpConnection::closeCallback(uv_handle_t* handle)
 
 void TcpConnection::shutdownCallback(uv_shutdown_t* handle, int status)
 {
-    free(handle);
     uv_tcp_t *client = static_cast<uv_tcp_t*>(handle->data);
+    free(handle);
     if (client != NULL) {
         uv_close(reinterpret_cast<uv_handle_t*>(client), TcpConnection::closeCallback);
     }
@@ -128,9 +129,7 @@ void TcpConnection::writeCallback(uv_write_t* req, int status)
             callback(context->conn);
         }
     }
-    if (context->buffType == BUF_VOID_PTR) {
-        free(const_cast<void*>(context->ptr));
-    }
+    delete context;
     free(req);
 }
 

@@ -132,14 +132,21 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
                     conn->setErrorCallback(tcpServer->errorCallback_);
                     conn->setWriteCompleteCallback(tcpServer->writeCompleteCallback_);
                     conn->setCloseCallback(bind(&TcpServer::removeConnection, tcpServer, std::placeholders::_1));
-                    conn->setUpdateConnectionCallback(bind(&TcpServer::updateConnection, tcpServer, placeholders::_1));
                     tcpServer->connectionMap_.value()[id] = conn;
-                    shared_ptr<Entry> entry(new Entry(conn));
-                    tcpServer->whell_.value().back().insert(entry);
-                    weak_ptr<Entry> weakEntyp(entry);
                     weak_ptr<TcpConnection> weakPtr(conn);
-                    auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weakEntyp);
-                    client->data = static_cast<void*>(data);
+                    if (tcpServer->timeout_ > 0) {
+                        shared_ptr<Entry> entry(new Entry(conn));
+                        tcpServer->whell_.value().back().insert(entry);
+                        weak_ptr<Entry> weakEntyp(entry);
+                        auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weakEntyp);
+                        client->data = static_cast<void*>(data);
+                        conn->setUpdateConnectionCallback(bind(&TcpServer::updateConnection, tcpServer, placeholders::_1));
+                    }
+                    else {
+                        auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weak_ptr<Entry>(shared_ptr<Entry>()));
+                        client->data = static_cast<void*>(data);
+                    }
+
                     if (callback != NULL) {
                         callback(conn);
                     }
@@ -155,14 +162,20 @@ void TcpServer::newConnectionCallback(uv_stream_t* server, int status)
                 conn->setErrorCallback(tcpServer->errorCallback_);
                 conn->setWriteCompleteCallback(tcpServer->writeCompleteCallback_);
                 conn->setCloseCallback(bind(&TcpServer::removeConnection, tcpServer, placeholders::_1));
-                conn->setUpdateConnectionCallback(bind(&TcpServer::updateConnection, tcpServer, placeholders::_1));
                 tcpServer->connectionMap_.value()[id] = conn;
-                shared_ptr<Entry> entry(new Entry(conn));
-                tcpServer->whell_.value().back().insert(entry);
-                weak_ptr<Entry> weakEntyp(entry);
                 weak_ptr<TcpConnection> weakPtr(conn);
-                auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weakEntyp);
-                client->data = static_cast<void*>(data);
+                if (tcpServer->timeout_ > 0) {
+                    shared_ptr<Entry> entry(new Entry(conn));
+                    tcpServer->whell_.value().back().insert(entry);
+                    weak_ptr<Entry> weakEntyp(entry);
+                    auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weakEntyp);
+                    client->data = static_cast<void*>(data);
+                    conn->setUpdateConnectionCallback(bind(&TcpServer::updateConnection, tcpServer, placeholders::_1));
+                }
+                else {
+                    auto *data = new pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>(weakPtr, weak_ptr<Entry>(shared_ptr<Entry>()));
+                    client->data = static_cast<void*>(data);
+                }
                 if (tcpServer->connectionCallback_ != NULL) {
                     tcpServer->connectionCallback_(conn);
                 }

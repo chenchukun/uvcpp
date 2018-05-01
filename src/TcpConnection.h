@@ -137,6 +137,12 @@ private:
             bufs.back().len = len;
         }
 
+        ~WriteContext() {
+            if (buffType == BUF_VOID_PTR) {
+                free(const_cast<void*>(ptr));
+            }
+        }
+
         std::vector<uv_buf_t> bufs;
         BUF_TYPE buffType;
         union {
