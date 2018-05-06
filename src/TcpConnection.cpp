@@ -48,12 +48,16 @@ void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_bu
         assert(conn->state_ != CLOSED && conn->state_ != CLOSE_WAIT);
         // 更新连接状态
         conn->state_ = conn->state_==CONNECTED? CLOSE_WAIT: CLOSED;
-        conn->connectionCallback_(conn);
+        if (conn->connectionCallback_ != NULL) {
+            conn->connectionCallback_(conn);
+        }
         uv_read_stop(stream);
         // 调用closeCallback,从TcpServer中删除该连接,这里不需要调用runInThread
         // 若此时用户不拥有该连接,则连接将析构,
         // 否则可以继续发送数据直到调用shutdown()
-        conn->closeCallback_(conn);
+        if (conn->closeCallback_ != NULL) {
+            conn->closeCallback_(conn);
+        }
     }
     else if (nread >= 0){
         weak_ptr<Entry> &weakEntry = data.second;
@@ -61,7 +65,9 @@ void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_bu
         if (entryPtr != NULL && conn->updateConnectionCallback_ != NULL) {
             conn->updateConnectionCallback_(entryPtr);
         }
-        conn->messageCallback_(conn, conn->buff_, nread);
+        if (conn->messageCallback_ != NULL) {
+            conn->messageCallback_(conn, conn->buff_, nread);
+        }
     }
     else {
        cerr << "read error: " << nread <<  uv_strerror(nread) << endl;

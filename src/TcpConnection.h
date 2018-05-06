@@ -19,7 +19,7 @@ public:
     // 连接状态、主动关闭发送了FIN、被动关闭接收到FIN、关闭
     typedef enum {CONNECTED, FIN_WAIT, CLOSE_WAIT, CLOSED} ConnectionState;
 
-    TcpConnection(EventLoop *loop, uv_tcp_t *client, size_t id);
+    TcpConnection(EventLoop *loop, uv_tcp_t *client, size_t id=-1);
 
     ~TcpConnection();
 
