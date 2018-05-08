@@ -19,8 +19,11 @@ int main()
     });
 
     server.setMessageCallback([] (TcpConnectionPtr &conn, char *buff, int len) {
-        buff[len] = 0;
-        conn->send(buff);
+        Buffer buffer(len + 20);
+        buffer.append(to_string(len));
+        buffer.append(" bytes: ");
+        buffer.append(buff, len);
+        conn->send(buffer);
         /*
         cout << "Recv " << len << " bytes" << endl;
         if (strncmp(buff, "shutdown", 8) == 0) {

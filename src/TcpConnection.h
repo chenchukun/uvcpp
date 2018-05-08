@@ -4,6 +4,7 @@
 #include "utility.h"
 #include "SockAddr.h"
 #include "Callbacks.h"
+#include "Buffer.h"
 #include <string>
 #include <vector>
 #include <uv.h>
@@ -77,6 +78,8 @@ public:
 
     void send(const void *ptr, size_t len);
 
+    void send(Buffer &buffer);
+
 public:
     static void readCallback(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
 
@@ -121,7 +124,7 @@ private:
     SockAddr peerAddr_, localAddr_;
 
 private:
-    enum BUF_TYPE {BUF_STD_STRING, BUF_VOID_PTR};
+    enum BUF_TYPE {BUF_STD_STRING, BUF_VOID_PTR, BUF_BUFFER};
 
     struct WriteContext
     {
@@ -145,6 +148,14 @@ private:
             bufs.back().len = len;
         }
 
+        WriteContext(const TcpConnectionPtr &c, const Buffer &buf)
+            : buffer(std::move(buf)),
+              conn(c),
+              buffType(BUF_BUFFER)
+        {
+            buf.initUVBuffer(bufs);
+        }
+
         ~WriteContext() {
             if (buffType == BUF_VOID_PTR) {
                 free(const_cast<void*>(ptr));
@@ -153,6 +164,9 @@ private:
                 // union中的对象无法正常析构,这里必须将对象移动到一个新的临时变量才可正常析构
                 std::string desStr(std::move(*(const_cast<std::string*>(&str))));
             }
+            else if (buffType == BUF_BUFFER) {
+                Buffer desBuffer(std::move(buffer));
+            }
         }
 
         std::vector<uv_buf_t> bufs;
@@ -160,6 +174,7 @@ private:
         union {
             const std::string str;
             const void *ptr;
+            const Buffer buffer;
         };
         TcpConnectionPtr conn;
     };

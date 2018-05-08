@@ -20,3 +20,6 @@ target_link_libraries(testThreadLocal uvcpp_static)
 
 add_executable(testTcpClient "testTcpClient.cpp")
 target_link_libraries(testTcpClient uvcpp_static)
+
+add_executable(testBuffer "testBuffer.cpp")
+target_link_libraries(testBuffer uvcpp_static)

@@ -163,4 +163,15 @@ void TcpConnection::send(const void *ptr, size_t len)
     });
 }
 
+void TcpConnection::send(Buffer &buffer)
+{
+    uv_write_t *wreq = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
+    WriteContext *context = new WriteContext(shared_from_this(), buffer);
+    wreq->data = static_cast<void*>(context);
+    uv_stream_t *stream = reinterpret_cast<uv_stream_t*>(client_);
+    eventLoop_->runInLoopThread([wreq, context, stream] {
+        uv_write(wreq, stream, context->bufs.data(), context->bufs.size(), TcpConnection::writeCallback);
+    });
+}
+
 NAMESPACE_END
