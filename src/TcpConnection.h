@@ -74,7 +74,7 @@ public:
 
     void shutdown();
 
-    void send(const std::string &str);
+    void send(std::string &str);
 
     void send(const void *ptr, size_t len);
 
@@ -105,7 +105,7 @@ private:
 
     ConnectionState state_;
 
-    char buff_[BUF_SIZE];
+    Buffer buffer_;
 
     ConnectionCallback connectionCallback_;
 
@@ -128,7 +128,7 @@ private:
 
     struct WriteContext
     {
-        WriteContext(const TcpConnectionPtr &c, const std::string &s)
+        WriteContext(const TcpConnectionPtr &c, std::string &s)
             : str(std::move(s)),
               conn(c),
               buffType(BUF_STD_STRING)
@@ -148,12 +148,12 @@ private:
             bufs.back().len = len;
         }
 
-        WriteContext(const TcpConnectionPtr &c, const Buffer &buf)
+        WriteContext(const TcpConnectionPtr &c, Buffer &buf)
             : buffer(std::move(buf)),
               conn(c),
               buffType(BUF_BUFFER)
         {
-            buf.initUVBuffer(bufs);
+            buffer.initUVBuffer(bufs);
         }
 
         ~WriteContext() {
@@ -165,7 +165,7 @@ private:
                 std::string desStr(std::move(*(const_cast<std::string*>(&str))));
             }
             else if (buffType == BUF_BUFFER) {
-                Buffer desBuffer(std::move(buffer));
+                Buffer desBuffer(std::move(*(const_cast<Buffer*>(&buffer))));
             }
         }
 

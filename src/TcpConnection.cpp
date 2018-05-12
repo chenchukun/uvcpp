@@ -66,7 +66,8 @@ void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_bu
             conn->updateConnectionCallback_(entryPtr);
         }
         if (conn->messageCallback_ != NULL) {
-            conn->messageCallback_(conn, conn->buff_, nread);
+            conn->buffer_.shift(nread);
+            conn->messageCallback_(conn, conn->buffer_);
         }
     }
     else {
@@ -79,8 +80,7 @@ void TcpConnection::allocCallback(uv_handle_t* handle, size_t suggested_size, uv
     auto &data = *(static_cast<pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>*>(handle->data));
     TcpConnectionPtr conn = data.first.lock();
     if (conn) {
-        buf->base = conn->buff_;
-        buf->len = TcpConnection::BUF_SIZE;
+        conn->buffer_.initUVBuffer(buf);
     }
     else {
         buf->base = NULL;
@@ -141,7 +141,7 @@ void TcpConnection::writeCallback(uv_write_t* req, int status)
     free(req);
 }
 
-void TcpConnection::send(const std::string &str)
+void TcpConnection::send(std::string &str)
 {
     uv_write_t *wreq = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
     WriteContext *context = new WriteContext(shared_from_this(), str);

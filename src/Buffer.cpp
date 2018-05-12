@@ -15,12 +15,7 @@ Buffer::Buffer(const Buffer &buffer)
 
 Buffer::Buffer(Buffer &&buffer)
 {
-    auto it = buffer.blocks_.begin();
-    while (it != buffer.blocks_.end()) {
-    blocks_.emplace_back(move(*it));
-        ++it;
-    }
-    buffer.blocks_.clear();
+    blocks_.swap(buffer.blocks_);
 }
 
 size_t Buffer::readableBytes() const
@@ -139,7 +134,7 @@ string Buffer::peekAsString(size_t size) const
 void Buffer::append(const void *ptr, size_t len)
 {
     ensureWritableBytes(len);
-    auto point = appendPoint(len);
+    auto point = appendPoint();
     auto it = point.first;
     const char *buf = static_cast<const char*>(ptr);
     while (len > 0 && it != blocks_.end()) {
@@ -184,7 +179,7 @@ void Buffer::prepend(const void *ptr, size_t len)
     }
 }
 
-pair<deque<Block>::iterator, size_t> Buffer::appendPoint(size_t size)
+pair<deque<Block>::iterator, size_t> Buffer::appendPoint()
 {
     if (readableBytes() == 0) {
         return pair<deque<Block>::iterator, size_t>(blocks_.begin(), 0);
@@ -244,6 +239,23 @@ void Buffer::initUVBuffer(std::vector<uv_buf_t> &bufs) const {
         }
         ++it;
     }
+}
+
+void Buffer::initUVBuffer(uv_buf_t *buf)
+{
+    if (writableBytes() == 0) {
+        blocks_.emplace_back(initSize);
+        buf->base = blocks_.back().head();
+        buf->len = initSize;
+    }
+    else {
+        auto point = appendPoint();
+        auto it = point.first;
+        size_t bytes = it->writableBytes();
+        buf->base = it->head() + it->writePosition();
+        buf->len = bytes;
+    }
+
 }
 
 NAMESPACE_END

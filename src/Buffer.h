@@ -35,7 +35,7 @@ public:
     }
 
     ~Block() {
-
+        free(buf_);
     }
 
     Block(const Block &block) {
@@ -67,6 +67,26 @@ public:
         block.start_ = block.end_ = block.cap_ = 0;
         buf_ = block.buf_;
         block.buf_ = NULL;
+    }
+
+    void swap(Block &block) {
+        std::swap(start_, block.start_);
+        std::swap(end_, block.end_);
+        std::swap(cap_, block.cap_);
+        std::swap(buf_, block.buf_);
+    }
+
+    Block& operator=(Block &&block) {
+        start_ = block.start_;
+        end_ = block.end_;
+        cap_ = block.cap_;
+        block.start_ = block.end_ = block.cap_ = 0;
+        if (buf_ != NULL) {
+            free(buf_);
+        }
+        buf_ = block.buf_;
+        block.buf_ = NULL;
+        return *this;
     }
 
     size_t readPosition() const {
@@ -142,7 +162,7 @@ private:
 class Buffer
 {
 public:
-    const static size_t initSize = 1024;
+    enum{initSize = 4096};
 
     explicit Buffer(size_t size=initSize)
     {
@@ -152,6 +172,13 @@ public:
     Buffer(const Buffer &buffer);
 
     Buffer(Buffer &&buffer);
+
+    ~Buffer() {
+    }
+
+    void swap(Buffer &buffer) {
+        blocks_.swap(buffer.blocks_);
+    }
 
     size_t readableBytes() const;
 
@@ -284,10 +311,19 @@ public:
         prepend(str.c_str(), str.size());
     }
 
+    // 只供TcpConnection调用
     void initUVBuffer(std::vector<uv_buf_t> &bufs) const;
 
+    void initUVBuffer(uv_buf_t *buf);
+
+    void shift(size_t len) {
+        auto point = appendPoint();
+        auto it = point.first;
+        it->setWritePosition(it->writePosition() + len);
+    }
+
 private:
-    std::pair<std::deque<Block>::iterator, size_t> appendPoint(size_t size);
+    std::pair<std::deque<Block>::iterator, size_t> appendPoint();
 
     std::pair<std::deque<Block>::iterator, size_t> prependPoint(size_t size);
 

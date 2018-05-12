@@ -35,9 +35,8 @@ int main(int argc, char **argv)
             cout << "disconnect" << endl;
         }
     });
-    client.setMessageCallback([] (TcpConnectionPtr &conn, char *buff, int len) {
-        buff[len] = 0;
-        cout << buff << endl;
+    client.setMessageCallback([] (TcpConnectionPtr &conn, Buffer &buffer) {
+        cout << buffer.retrieveAllAsString() << endl;
     });
     client.connect();
     eventLoop.run();

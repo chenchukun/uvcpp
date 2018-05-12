@@ -18,18 +18,10 @@ int main()
         cout << conn->getPeerAddr().getIpPort() << (conn->connected()?" online": " offline") << endl;
     });
 
-    server.setMessageCallback([] (TcpConnectionPtr &conn, char *buff, int len) {
-        Buffer buffer(len + 20);
-        buffer.append(to_string(len));
-        buffer.append(" bytes: ");
-        buffer.append(buff, len);
+    server.setMessageCallback([] (TcpConnectionPtr &conn, Buffer &buffer) {
+        size_t len = buffer.readableBytes();
+        buffer.prepend(to_string(len) + " bytes: ");
         conn->send(buffer);
-        /*
-        cout << "Recv " << len << " bytes" << endl;
-        if (strncmp(buff, "shutdown", 8) == 0) {
-            conn->shutdown();
-        }
-         */
     });
 
     server.setWriteCompleteCallback([] (TcpConnectionPtr &conn) {

@@ -10,13 +10,15 @@ class TcpConnection;
 
 class EventLoop;
 
+class Buffer;
+
 typedef std::shared_ptr<TcpConnection> TcpConnectionPtr;
 
 typedef std::weak_ptr<TcpConnection> WeakTcpConnectionPtr;
 
 typedef std::function<void(TcpConnectionPtr &conn)> ConnectionCallback;
 
-typedef std::function<void(TcpConnectionPtr &conn, char *buff, int len)> MessageCallback;
+typedef std::function<void(TcpConnectionPtr &conn, Buffer &buffer)> MessageCallback;
 
 typedef std::function<void(int errcode, const std::string &errmsg)> ErrorCallback;
 
