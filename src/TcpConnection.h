@@ -160,22 +160,13 @@ private:
             if (buffType == BUF_VOID_PTR) {
                 free(const_cast<void*>(ptr));
             }
-            else if (buffType == BUF_STD_STRING) {
-                // union中的对象无法正常析构,这里必须将对象移动到一个新的临时变量才可正常析构
-                std::string desStr(std::move(*(const_cast<std::string*>(&str))));
-            }
-            else if (buffType == BUF_BUFFER) {
-                Buffer desBuffer(std::move(*(const_cast<Buffer*>(&buffer))));
-            }
         }
 
         std::vector<uv_buf_t> bufs;
         BUF_TYPE buffType;
-        union {
-            const std::string str;
-            const void *ptr;
-            const Buffer buffer;
-        };
+        const std::string str;
+        const void *ptr;
+        const Buffer buffer;
         TcpConnectionPtr conn;
     };
 };

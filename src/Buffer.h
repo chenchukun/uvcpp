@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <uv.h>
 #include <vector>
+#include <google/protobuf/io/zero_copy_stream.h>
 
 NAMESPACE_START
 
@@ -159,12 +160,13 @@ private:
     size_t start_, end_, cap_;
 };
 
-class Buffer
+class Buffer : public google::protobuf::io::ZeroCopyOutputStream
 {
 public:
     enum{initSize = 4096};
 
     explicit Buffer(size_t size=initSize)
+        : originalSize_(0)
     {
         blocks_.emplace_back(size);
     }
@@ -322,6 +324,32 @@ public:
         it->setWritePosition(it->writePosition() + len);
     }
 
+    virtual bool Next(void ** data, int * size) {
+        if (writableBytes() <= 0) {
+            ensurePrependBytes(initSize);
+        }
+        auto point = appendPoint();
+        auto it = point.first;
+        size_t bytes = it->writableBytes();
+        *data = static_cast<void*>(it->head() + it->writePosition());
+        *size = bytes;
+        if (originalSize_ == 0) {
+            originalSize_ = readableBytes();
+        }
+        it->setWritePosition(it->writePosition() + bytes);
+        return true;
+    }
+
+    virtual void BackUp(int count) {
+        discard(count);
+    }
+
+    virtual int64_t ByteCount() const {
+        int64_t bytes = readableBytes() - originalSize_;
+        originalSize_ = 0;
+        return bytes;
+    }
+
 private:
     std::pair<std::deque<Block>::iterator, size_t> appendPoint();
 
@@ -329,6 +357,8 @@ private:
 
 private:
     std::deque<Block> blocks_;
+
+    mutable size_t originalSize_;
 };
 
 NAMESPACE_END

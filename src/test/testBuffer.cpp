@@ -1,4 +1,5 @@
 #include "../Buffer.h"
+#include "person.pb.h"
 #include <iostream>
 using namespace std;
 using namespace uvcpp;
@@ -28,6 +29,13 @@ int main()
     cout << (buffer.readInt32() == 32) << endl;
     cout << (buffer.readInt16() == 16) << endl;
     cout << (buffer.readInt8() == 8) << endl;
+
+    Person person;
+    person.set_name("kikuchanj");
+    person.set_id(1);
+    cout << buffer.readableBytes() << endl;
+    person.SerializeToZeroCopyStream(&buffer);
+    cout << buffer.readableBytes() << endl;
 
     return 0;
 }

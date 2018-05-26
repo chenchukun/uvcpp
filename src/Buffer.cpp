@@ -5,6 +5,7 @@ using namespace std;
 NAMESPACE_START
 
 Buffer::Buffer(const Buffer &buffer)
+    : originalSize_(0)
 {
     auto it = buffer.blocks_.cbegin();
     while (it != buffer.blocks_.cend()) {
@@ -14,6 +15,7 @@ Buffer::Buffer(const Buffer &buffer)
 }
 
 Buffer::Buffer(Buffer &&buffer)
+    : originalSize_(0)
 {
     blocks_.swap(buffer.blocks_);
 }
