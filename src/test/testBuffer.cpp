@@ -1,41 +1,139 @@
 #include "../Buffer.h"
-#include "person.pb.h"
 #include <iostream>
 using namespace std;
 using namespace uvcpp;
 
-int main()
+string result;
+
+const char* chars = "_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_,./:*+;[]-=~^|'\"<>";
+
+size_t randInt(size_t low, size_t hight)
 {
-    Buffer buffer(10);
-    buffer.appendInt8(16);
-    buffer.appendInt16(1024);
-    cout << (int(buffer.readInt8()) == 16) << endl;
-    buffer.prepend("hello uvcpp");
-    cout << (buffer.retrieveAsString(11) == "hello uvcpp") << endl;
-    buffer.appendInt32(66666);
-    buffer.appendInt64(1234567890123);
-    buffer.append("hello world");
-    cout << (buffer.readInt16() == 1024) << endl;
-    cout << (buffer.peekInt32() == 66666) << endl;
-    buffer.discard(4);
-    cout << (buffer.readInt64() == 1234567890123) << endl;
-    cout << (buffer.retrieveAsString(11) == "hello world") << endl;
-    buffer.prependInt8(8);
-    buffer.prependInt16(16);
-    buffer.prependInt32(32);
-    buffer.prependInt64(64);
+    size_t n = (rand() % (hight - low)) + low;
+    return n;
+}
 
-    cout << (buffer.readInt64() == 64) << endl;
-    cout << (buffer.readInt32() == 32) << endl;
-    cout << (buffer.readInt16() == 16) << endl;
-    cout << (buffer.readInt8() == 8) << endl;
+string randString(size_t len)
+{
+    string str;
+    str.reserve(len);
+    while (len--) {
+        str.push_back(chars[randInt(0, strlen(chars))]);
+    }
+    return str;
+}
 
-    Person person;
-    person.set_name("kikuchanj");
-    person.set_id(1);
-    cout << buffer.readableBytes() << endl;
-    person.SerializeToZeroCopyStream(&buffer);
-    cout << buffer.readableBytes() << endl;
+void append(Buffer &buffer, size_t len)
+{
+    cout << "append " << len << " bytes" << endl;
+    string str = move(randString(len));
+    buffer.append(str);
+    result += str;
+    buffer.debug();
+    if (buffer.toString() != result) {
+        cerr << "ERROR: append error" << endl;
+        cerr << "append str = " << str << endl;
+        cerr << "result = " << result << endl;
+        cerr << "buffer = " << buffer.toString() << endl;
+        exit(-1);
+    }
+}
+
+void prepend(Buffer &buffer, size_t len)
+{
+    cout << "prepend " << len << " bytes" << endl;
+    string str = move(randString(len));
+    buffer.prepend(str);
+    result = str + result;
+    buffer.debug();
+    if (buffer.toString() != result) {
+        cerr << "ERROR: prepend error" << endl;
+        cerr << "prepend str = " << str << endl;
+        cerr << "result = " << result << endl;
+        cerr << "buffer = " << buffer.toString() << endl;
+        exit(-1);
+    }
+}
+
+void retrieveAsString(Buffer &buffer, size_t len)
+{
+    cout << "retrieveAsString " << len << " bytes" << endl;
+    string str = buffer.retrieveAsString(len);
+    string res = result.substr(0, len);
+    result = result.substr(len, result.size() - len);
+    buffer.debug();
+    if (str != res) {
+        cerr << "ERROR: retrieveAsString error" << endl;
+        cerr << "retrieveAsString len = " << len << endl;
+        cerr << "res = " << res << endl;
+        cerr << "str = " << str << endl;
+        exit(-1);
+    }
+}
+
+void discard(Buffer &buffer, size_t len)
+{
+    cout << "discard " << len << " bytes" << endl;
+    size_t readableBytes = buffer.readableBytes();
+    buffer.discard(len);
+    result = result.substr(len, result.size() - len);
+    buffer.debug();
+    if (buffer.readableBytes() != readableBytes - len) {
+        cerr << "ERROR: discard error" << endl;
+        cerr << "discard len = " << len << endl;
+        exit(-1);
+    }
+}
+
+void test(int n)
+{
+    Buffer buffer;
+
+    srand(time(NULL));
+    for (int i=0; i<n; ++i) {
+        size_t chose = randInt(0, 70);
+        if (chose < 30) {
+            if (buffer.readableBytes() < 409600) {
+                append(buffer, randInt(1, 2048));
+            }
+        }
+        else if (chose < 35) {
+            if (buffer.readableBytes() < 409600) {
+                prepend(buffer, randInt(1, 512));
+            }
+        }
+        else if (chose < 60) {
+            if (buffer.readableBytes() > 0) {
+                retrieveAsString(buffer, randInt(1, buffer.readableBytes() + 1));
+            }
+        }
+        else {
+            if (buffer.readableBytes() > 0) {
+                discard(buffer, randInt(1, buffer.readableBytes() + 1));
+            }
+        }
+    }
+}
+
+int main(int argc, char **argv)
+{
+//    test(stoi(argv[1]));
+
+    Buffer buffer;
+    buffer.append(randString(500));
+    buffer.prepend("12345", 5);
+    buffer.append(randString(600));
+    buffer.debug();
+    Buffer buffer2 = buffer;
+    buffer2.debug();
+    Buffer buffer3 = move(buffer2);
+    buffer2.debug();
+    buffer3.debug();
+
+    Buffer buffer4;
+    buffer4.swap(buffer3);
+    buffer3.debug();
+    buffer4.debug();
 
     return 0;
 }

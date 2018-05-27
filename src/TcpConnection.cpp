@@ -66,7 +66,7 @@ void TcpConnection::readCallback(uv_stream_t* stream, ssize_t nread, const uv_bu
             conn->updateConnectionCallback_(entryPtr);
         }
         if (conn->messageCallback_ != NULL) {
-            conn->buffer_.shift(nread);
+            conn->buffer_.extend(nread);
             conn->messageCallback_(conn, conn->buffer_);
         }
     }
@@ -141,7 +141,7 @@ void TcpConnection::writeCallback(uv_write_t* req, int status)
     free(req);
 }
 
-void TcpConnection::send(std::string &str)
+void TcpConnection::send(const std::string &str)
 {
     uv_write_t *wreq = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
     WriteContext *context = new WriteContext(shared_from_this(), str);
@@ -167,6 +167,17 @@ void TcpConnection::send(Buffer &buffer)
 {
     uv_write_t *wreq = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
     WriteContext *context = new WriteContext(shared_from_this(), buffer);
+    wreq->data = static_cast<void*>(context);
+    uv_stream_t *stream = reinterpret_cast<uv_stream_t*>(client_);
+    eventLoop_->runInLoopThread([wreq, context, stream] {
+        uv_write(wreq, stream, context->bufs.data(), context->bufs.size(), TcpConnection::writeCallback);
+    });
+}
+
+void TcpConnection::send(string &&str)
+{
+    uv_write_t *wreq = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
+    WriteContext *context = new WriteContext(shared_from_this(), str);
     wreq->data = static_cast<void*>(context);
     uv_stream_t *stream = reinterpret_cast<uv_stream_t*>(client_);
     eventLoop_->runInLoopThread([wreq, context, stream] {

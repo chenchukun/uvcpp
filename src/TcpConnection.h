@@ -74,7 +74,9 @@ public:
 
     void shutdown();
 
-    void send(std::string &str);
+    void send(const std::string &str);
+
+    void send(std::string &&str);
 
     void send(const void *ptr, size_t len);
 
@@ -128,10 +130,20 @@ private:
 
     struct WriteContext
     {
-        WriteContext(const TcpConnectionPtr &c, std::string &s)
-            : str(std::move(s)),
-              conn(c),
-              buffType(BUF_STD_STRING)
+        WriteContext(const TcpConnectionPtr &c, const std::string &s)
+            : buffType(BUF_STD_STRING),
+              str(s),
+              conn(c)
+        {
+            bufs.push_back(uv_buf_t());
+            bufs.back().base = const_cast<char*>(str.data());
+            bufs.back().len = str.size();
+        }
+
+        WriteContext(const TcpConnectionPtr &c, std::string &&s)
+            : buffType(BUF_STD_STRING),
+              str(std::move(s)),
+              conn(c)
         {
             bufs.push_back(uv_buf_t());
             bufs.back().base = const_cast<char*>(str.data());
@@ -139,19 +151,19 @@ private:
         }
 
         WriteContext(const TcpConnectionPtr &c, const void *p, size_t len)
-            : ptr(p),
-              conn(c),
-              buffType(BUF_VOID_PTR)
+            : buffType(BUF_VOID_PTR),
+              ptr(p),
+              conn(c)
         {
             bufs.push_back(uv_buf_t());
-            bufs.back().base = static_cast<char*>(const_cast<void*>(p));
+            bufs.back().base = const_cast<char*>(static_cast<const char*>(ptr));
             bufs.back().len = len;
         }
 
         WriteContext(const TcpConnectionPtr &c, Buffer &buf)
-            : buffer(std::move(buf)),
-              conn(c),
-              buffType(BUF_BUFFER)
+            : buffType(BUF_BUFFER),
+              buffer(std::move(buf)),
+              conn(c)
         {
             buffer.initUVBuffer(bufs);
         }
@@ -166,7 +178,7 @@ private:
         BUF_TYPE buffType;
         const std::string str;
         const void *ptr;
-        const Buffer buffer;
+        Buffer buffer;
         TcpConnectionPtr conn;
     };
 };

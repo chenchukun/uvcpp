@@ -1,263 +1,313 @@
 #include "Buffer.h"
+#include <iostream>
 
 using namespace std;
 
 NAMESPACE_START
 
-Buffer::Buffer(const Buffer &buffer)
-    : originalSize_(0)
+const size_t MIN_BUFFER_SIZE = 1024;
+
+DataBlock::DataBlock(size_t len)
 {
-    auto it = buffer.blocks_.cbegin();
-    while (it != buffer.blocks_.cend()) {
-        blocks_.push_back(*it);
+    size_t realSize = MIN_BUFFER_SIZE;
+    while (realSize < len) {
+        realSize *= 2;
+    }
+    buffer_.resize(realSize);
+    read_ = write_ = 0;
+}
+
+void DataBlock::realign() {
+    size_t rindex = readPosition();
+    if (rindex > 0) {
+        size_t index = 0;
+        for (; rindex < writePosition(); ++rindex) {
+            buffer_[index++] = buffer_[rindex];
+        }
+        setReadPosition(0);
+        setWritePosition(index);
+    }
+}
+
+Buffer::Buffer()
+    : firstWithData_(list_.begin()),
+      lastWithData_(list_.end()),
+      readableBytes_(0),
+      capacity_(0)
+{
+}
+
+Buffer::Buffer(const Buffer &buffer)
+    : list_(buffer.list_),
+      firstWithData_(list_.begin()),
+      lastWithData_(list_.end()),
+      readableBytes_(buffer.readableBytes_),
+      capacity_(buffer.capacity_)
+{
+    auto it = buffer.firstWithData_;
+    auto mit = list_.begin();
+    while (it != buffer.list_.end()) {
+        if (it == buffer.firstWithData_) {
+            firstWithData_ = mit;
+        }
+        if (it == buffer.lastWithData_) {
+            lastWithData_ = mit;
+        }
+        ++mit;
         ++it;
     }
 }
 
 Buffer::Buffer(Buffer &&buffer)
-    : originalSize_(0)
+    : firstWithData_(list_.begin()),
+      lastWithData_(list_.end()),
+      readableBytes_(0),
+      capacity_(0)
 {
-    blocks_.swap(buffer.blocks_);
+    list_.swap(buffer.list_);
+    std::swap(firstWithData_, buffer.firstWithData_);
+    std::swap(lastWithData_, buffer.lastWithData_);
+    // 不加这两行会出错?
+    buffer.firstWithData_ = buffer.list_.begin();
+    buffer.lastWithData_ = buffer.list_.end();
+    std::swap(readableBytes_, buffer.readableBytes_);
+    std::swap(capacity_, buffer.capacity_);
 }
 
-size_t Buffer::readableBytes() const
+Buffer& Buffer::operator=(const Buffer &buffer)
 {
-    size_t size = 0;
-    auto it = blocks_.cbegin();
-    while (it != blocks_.cend()) {
-        size += it->readableBytes();
-        ++it;
-    }
-    return size;
+    Buffer buf = buffer;
+    swap(buf);
+    return *this;
 }
 
-size_t Buffer::writableBytes() const
+void Buffer::swap(Buffer &buffer)
 {
-    if (blocks_.empty()) {
-        return 0;
-    }
-    size_t bytes = 0;
-    auto it = blocks_.crbegin();
-    while (it != blocks_.crend() && it->empty()) {
-        bytes += it->writableBytes();
-        ++it;
-    }
-    if (it != blocks_.crend()) {
-        bytes += it->writableBytes();
-    }
-    return bytes;
-}
-
-size_t Buffer::prependSpaceBytes() const
-{
-    if (blocks_.empty()) {
-        return 0;
-    }
-    size_t bytes = 0;
-    auto it = blocks_.cbegin();
-    while (it != blocks_.cend() && it->empty()) {
-        bytes += it->writableBytes();
-        ++it;
-    }
-    if (it != blocks_.cend()) {
-        bytes += it->prependSpaceBytes();
-    }
-    return bytes;
-}
-
-void Buffer::discard(size_t size)
-{
-    assert(size <= readableBytes());
-    auto it = blocks_.begin();
-    while (it != blocks_.end() && size > 0) {
-        size_t bytes = it->readableBytes();
-        if (bytes <= size) {
-            blocks_.pop_front();
-            it = blocks_.begin();
-            size -= bytes;
-            continue;
-        }
-        it->setReadPosition(it->readPosition() + size);
-        break;
-    }
-}
-
-
-string Buffer::retrieveAsString(size_t size)
-{
-    assert(size <= readableBytes());
-    string str;
-    str.reserve(size);
-    auto it = blocks_.begin();
-    while (it != blocks_.end() && size > 0) {
-        const char *peek = it->peek();
-        size_t bytes = it->readableBytes();
-        size_t readPos = it->readPosition();
-        if (bytes >= size) {
-            str.insert(str.end(), peek, peek + size);
-            it->setReadPosition(readPos + size);
-            size = 0;
-            if (it->empty()) {
-                blocks_.pop_front();
-            }
-        }
-        else {
-            str.insert(str.end(), peek, peek + bytes);
-            blocks_.pop_front();
-            it = blocks_.begin();
-            size -= bytes;
-        }
-    }
-    return move(str);
-}
-
-string Buffer::peekAsString(size_t size) const
-{
-    assert(size <= readableBytes());
-    string str;
-    str.reserve(size);
-    auto it = blocks_.begin();
-    while (it != blocks_.end()  && size > 0) {
-        const char *peek = it->peek();
-        size_t bytes = it->readableBytes();
-        if (bytes > size) {
-            str.insert(str.end(), peek, peek + size);
-            size = 0;
-        }
-        else {
-            str.insert(str.end(), peek, peek + bytes);
-            size -= bytes;
-        }
-        ++it;
-    }
-    return move(str);
+    list_.swap(buffer.list_);
+    std::swap(firstWithData_, buffer.firstWithData_);
+    std::swap(lastWithData_, buffer.lastWithData_);
+    std::swap(readableBytes_, buffer.readableBytes_);
+    std::swap(capacity_, buffer.capacity_);
 }
 
 void Buffer::append(const void *ptr, size_t len)
 {
-    ensureWritableBytes(len);
-    auto point = appendPoint();
-    auto it = point.first;
+    if (lastWithData_ == list_.end()) {
+        list_.emplace_back(len);
+        lastWithData_ = list_.end();
+        --lastWithData_;
+        capacity_ += lastWithData_->capacity();
+        if (list_.size() == 1) {
+            firstWithData_ = lastWithData_;
+        }
+    }
+
     const char *buf = static_cast<const char*>(ptr);
-    while (len > 0 && it != blocks_.end()) {
-        size_t bytes = it->writableBytes();
-        if (bytes >= len) {
-            memcpy(it->peek() + it->readableBytes(), buf, len);
-            it->setWritePosition(it->writePosition() + len);
-            len = 0;
+    if (lastWithData_->writeableBytes() >= len) {
+        memcpy(lastWithData_->peek() + lastWithData_->writePosition(), buf, len);
+        lastWithData_->setWritePosition(lastWithData_->writePosition() + len);
+        readableBytes_ += len;
+    }
+    else if (lastWithData_->totalSpace() >= len) {
+        lastWithData_->realign();
+        memcpy(lastWithData_->peek() + lastWithData_->writePosition(), buf, len);
+        lastWithData_->setWritePosition(lastWithData_->writePosition() + len);
+        readableBytes_ += len;
+    }
+    else {
+        size_t nwrite = lastWithData_->writeableBytes();
+        if (nwrite > 0) {
+            memcpy(lastWithData_->peek() + lastWithData_->writePosition(), buf, nwrite);
+            lastWithData_->setWritePosition(lastWithData_->capacity());
+            readableBytes_ += nwrite;
         }
-        else {
-            memcpy(it->peek() + it->readableBytes(), buf, bytes);
-            it->setWritePosition(it->writePosition() + bytes);
-            len -= bytes;
-            buf += bytes;
-            ++it;
-        }
+        ++lastWithData_;
+        append(buf + nwrite, len - nwrite);
     }
 }
 
 void Buffer::prepend(const void *ptr, size_t len)
 {
-    ensurePrependBytes(len);
-    auto point = prependPoint(len);
-    auto it = point.first;
-    size_t offset = point.second;
     const char *buf = static_cast<const char*>(ptr);
+    if (firstWithData_ == list_.end()) {
+        list_.emplace_front(len);
+        firstWithData_ = lastWithData_ = list_.begin();
+        capacity_ += firstWithData_->capacity();
+        size_t offset = firstWithData_->capacity() - len;
+        memcpy(firstWithData_->peek() + offset, buf, len);
+        firstWithData_->setWritePosition(firstWithData_->capacity());
+        firstWithData_->setReadPosition(offset);
+        readableBytes_ += len;
+    }
+    else if (firstWithData_->prependableBytes() >= len) {
+        memcpy(firstWithData_->peek() + firstWithData_->prependableBytes() - len, buf, len);
+        firstWithData_->setReadPosition(firstWithData_->prependableBytes() - len);
+        readableBytes_ += len;
+    }
+    else if (firstWithData_->prependableBytes() > 0) {
+        size_t remain = firstWithData_->prependableBytes();
+        memcpy(firstWithData_->peek(), buf + len - remain, remain);
+        len -= remain;
+        readableBytes_ += remain;
+        firstWithData_->setReadPosition(0);
+        prepend(buf, len);
+    }
+    else if (firstWithData_->prependableBytes() == 0) {
+        list_.emplace_front(len);
+        firstWithData_ = list_.begin();
+        capacity_ += firstWithData_->capacity();
+        size_t offset = firstWithData_->capacity() - len;
+        memcpy(firstWithData_->peek() + offset, buf, len);
+        firstWithData_->setWritePosition(firstWithData_->capacity());
+        firstWithData_->setReadPosition(offset);
+        readableBytes_ += len;
+    }
+}
+
+string Buffer::toString(size_t len) const
+{
+    assert(readableBytes() >= len);
+
+    string str;
+    str.reserve(len);
+    auto it = firstWithData_;
     while (len > 0) {
-        if (it->empty()) {
-            size_t bytes = it->writableBytes() < len? it->writableBytes(): len;
-            memcpy(it->head() + offset, buf, bytes);
-            it->setWritePosition(bytes);
-            len -= bytes;
-            buf += bytes;
-            offset = 0;
-        }
-        else {
-            memcpy(it->head() + offset, buf, len);
-            it->setReadPosition(it->readPosition() - len);
+        if (it->readableBytes() >= len) {
+            str.insert(str.size(), it->peek() + it->readPosition(), len);
             len = 0;
         }
+        else if (it->readableBytes() > 0) {
+            str.insert(str.size(), it->peek() + it->readPosition(), it->readableBytes());
+            len -= it->readableBytes();
+        }
         ++it;
     }
+    return str;
 }
 
-pair<deque<Block>::iterator, size_t> Buffer::appendPoint()
+string Buffer::toString() const
 {
-    if (readableBytes() == 0) {
-        return pair<deque<Block>::iterator, size_t>(blocks_.begin(), 0);
+    return toString(readableBytes());
+}
+
+void Buffer::discard(size_t len)
+{
+    size_t backlen = len;
+    assert(len <= readableBytes());
+    auto it = firstWithData_;
+    while (len > 0) {
+        if (it->readableBytes() >= len) {
+            it->setReadPosition(it->readPosition() + len);
+            len = 0;
+        }
+        else if (it->readableBytes() > 0) {
+            len -= it->readableBytes();
+            it->setReadPosition(it->readPosition() + it->readableBytes());
+        }
+        ++it;
     }
-    auto it = blocks_.begin();
-    size_t bytes = readableBytes();
-    size_t count = 0;
-    while (it != blocks_.end()) {
-        count += it->readableBytes();
-        if (count >= bytes) {
+    it = list_.begin();
+    while (it != lastWithData_) {
+        if (it->readableBytes() > 0) {
             break;
         }
-    }
-    assert(it != blocks_.end());
-    if (it->writableBytes() == 0) {
-        return pair<deque<Block>::iterator, size_t>(++it, 0);
-    }
-    else {
-        return pair<deque<Block>::iterator, size_t>(it, it->writePosition());
-    }
-}
-
-pair<deque<Block>::iterator, size_t> Buffer::prependPoint(size_t size)
-{
-    if (readableBytes() == 0) {
-        return pair<deque<Block>::iterator, size_t>(blocks_.begin(), 0);
-    }
-    auto it = blocks_.begin();
-    while (it != blocks_.end() && it->empty()) {
+        auto tmp = it;
         ++it;
+        list_.erase(tmp);
     }
-    assert(it != blocks_.end());
-    if (it->prependSpaceBytes() >= size) {
-        return pair<deque<Block>::iterator, size_t>(it, it->readPosition() - size);
-    }
-    size_t count = size - it->prependSpaceBytes();
-
-    while (it != blocks_.begin()) {
-        --it;
-        if (it->writableBytes() >= count) {
-            return pair<deque<Block>::iterator, size_t>(it, it->writableBytes() - count);
-        }
-        else {
-            count -= it->writableBytes();
-        }
-    }
-    assert(false);
+    firstWithData_ = it;
+    readableBytes_ -= backlen;
 }
 
-void Buffer::initUVBuffer(std::vector<uv_buf_t> &bufs) const {
-    auto it = blocks_.begin();
-    while (it != blocks_.end()) {
-        if (!it->empty()) {
+void Buffer::discardAll()
+{
+    list_ = list<DataBlock>();
+    readableBytes_ = capacity_ = 0;
+    firstWithData_ = list_.begin();
+    lastWithData_ = list_.end();
+}
+
+string Buffer::retrieveAsString(size_t len)
+{
+    assert(readableBytes() >= len);
+    string str = move(toString(len));
+    discard(len);
+    return str;
+}
+
+string Buffer::retrieveAllAsString()
+{
+    return retrieveAsString(readableBytes());
+}
+
+void Buffer::initUVBuffer(std::vector<uv_buf_t> &bufs) const
+{
+    auto it = firstWithData_;
+    while (it != lastWithData_) {
+        if (it->readableBytes() > 0) {
             bufs.push_back(uv_buf_t());
-            bufs.back().base = const_cast<char*>(it->peek());
+            bufs.back().base = const_cast<char*>(it->peek() + it->readPosition());
             bufs.back().len = it->readableBytes();
         }
         ++it;
     }
+    if (it != list_.end() && it->readableBytes() > 0) {
+        bufs.push_back(uv_buf_t());
+        bufs.back().base = const_cast<char*>(it->peek() + it->readPosition());
+        bufs.back().len = it->readableBytes();
+    }
 }
 
-void Buffer::initUVBuffer(uv_buf_t *buf)
+void Buffer::initUVBuffer(uv_buf_t* buf)
 {
-    if (writableBytes() == 0) {
-        blocks_.emplace_back(initSize);
-        buf->base = blocks_.back().head();
-        buf->len = initSize;
+    list<DataBlock>::iterator it = lastWithData_;
+    if (lastWithData_ == list_.end()) {
+        list_.emplace_back();
+        lastWithData_ = list_.end();
+        --lastWithData_;
+        capacity_ += lastWithData_->capacity();
+        if (list_.size() == 1) {
+            firstWithData_ = lastWithData_;
+        }
+        it = lastWithData_;
     }
-    else {
-        auto point = appendPoint();
-        auto it = point.first;
-        size_t bytes = it->writableBytes();
-        buf->base = it->head() + it->writePosition();
-        buf->len = bytes;
+    else if (lastWithData_->writeableBytes() == 0) {
+        it = lastWithData_;
+        ++it;
+        if (it == list_.end()) {
+            list_.emplace_back();
+            --it;
+            capacity_ += it->capacity();
+        }
     }
+    else if (lastWithData_->prependableBytes() >= lastWithData_->capacity() / 2) {
+        lastWithData_->realign();
+    }
+    buf->base = it->peek() + it->readPosition();
+    buf->len = it->writeableBytes();
+}
 
+void Buffer::extend(size_t len)
+{
+    auto it = lastWithData_;
+    if (lastWithData_->writeableBytes() == 0) {
+        ++it;
+    }
+    it->setWritePosition(it->writePosition() + len);
+    readableBytes_ += len;
+}
+
+void Buffer::debug() const
+{
+    auto it = list_.begin();
+    cout << "----------------------------------" << endl;
+    cout << "firstWithData = " << &(*firstWithData_) << endl;
+    cout << "lastWithData = " << &(*lastWithData_) << endl;
+    while (it != list_.end()) {
+        cout << &(*it) << ": readPosition = " << it->readPosition() << ", writePosition = " << it->writePosition() << endl;
+        ++it;
+    }
+    cout << "----------------------------------" << endl;
 }
 
 NAMESPACE_END

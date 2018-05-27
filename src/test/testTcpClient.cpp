@@ -36,7 +36,7 @@ int main(int argc, char **argv)
         }
     });
     client.setMessageCallback([] (TcpConnectionPtr &conn, Buffer &buffer) {
-        cout << buffer.retrieveAllAsString() << endl;
+//        cout << buffer.retrieveAllAsString() << endl;
     });
     client.connect();
     eventLoop.run();

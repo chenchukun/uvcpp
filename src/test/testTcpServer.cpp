@@ -20,12 +20,17 @@ int main()
 
     server.setMessageCallback([] (TcpConnectionPtr &conn, Buffer &buffer) {
         size_t len = buffer.readableBytes();
+        cout << "Recv " << buffer.toString() << endl;
         buffer.prepend(to_string(len) + " bytes: ");
+        cout << "send before buffer:  " << endl;
+        buffer.debug();
         conn->send(buffer);
+        cout << "send after buffer:  " << endl;
+        buffer.debug();
     });
 
     server.setWriteCompleteCallback([] (TcpConnectionPtr &conn) {
-//j        cout << "Send data to " << conn->getPeerAddr().getIpPort() << " finish" << endl;
+        cout << "Send data to " << conn->getPeerAddr().getIpPort() << " finish" << endl;
     });
 
     int ret = server.start(SockAddr(6180));

@@ -5,7 +5,7 @@
 #include <string>
 #include <assert.h>
 #include <cstdlib>
-#include <deque>
+#include <list>
 #include <cstring>
 #include <arpa/inet.h>
 #include <uv.h>
@@ -14,352 +14,234 @@
 
 NAMESPACE_START
 
-struct Block
+class DataBlock
 {
 public:
-    Block(size_t len)
-        : start_(0),
-          end_(0),
-          cap_(len)
+    DataBlock(size_t len=1024);
+
+    DataBlock(DataBlock &&data)
+        : buffer_(std::move(data.buffer_)),
+          read_(data.read_),
+          write_(data.write_)
     {
-        assert(len > 0);
-        buf_ = static_cast<char*>(malloc(sizeof(char) * len));
-        assert(buf_ != NULL);
     }
 
-    Block(void *ptr, size_t len)
-        : start_(0),
-          end_(len),
-          cap_(len)
+    DataBlock(const DataBlock &data)
+        : buffer_(data.buffer_),
+          read_(data.read_),
+          write_(data.write_)
     {
-        buf_ = static_cast<char*>(ptr);
     }
 
-    ~Block() {
-        free(buf_);
-    }
-
-    Block(const Block &block) {
-        start_ = block.start_;
-        end_ = block.end_;
-        cap_ = block.cap_;
-        buf_ = static_cast<char*>(malloc(block.capacity()));
-        assert(buf_ != NULL);
-        memcpy(buf_ + start_, block.peek(), block.readableBytes());
-    }
-
-    Block& operator=(const Block &block) {
-        start_ = block.start_;
-        end_ = block.end_;
-        cap_ = block.cap_;
-        if (buf_ != NULL) {
-            free(buf_);
-        }
-        buf_ = static_cast<char*>(malloc(block.capacity()));
-        assert(buf_ != NULL);
-        memcpy(buf_ + start_, block.peek(), block.readableBytes());
+    DataBlock& operator=(const DataBlock &data) {
+        buffer_ = data.buffer_;
+        read_ = data.read_;
+        write_ = data.write_;
         return *this;
     }
 
-    Block(Block &&block) {
-        start_ = block.start_;
-        end_ = block.end_;
-        cap_ = block.cap_;
-        block.start_ = block.end_ = block.cap_ = 0;
-        buf_ = block.buf_;
-        block.buf_ = NULL;
-    }
-
-    void swap(Block &block) {
-        std::swap(start_, block.start_);
-        std::swap(end_, block.end_);
-        std::swap(cap_, block.cap_);
-        std::swap(buf_, block.buf_);
-    }
-
-    Block& operator=(Block &&block) {
-        start_ = block.start_;
-        end_ = block.end_;
-        cap_ = block.cap_;
-        block.start_ = block.end_ = block.cap_ = 0;
-        if (buf_ != NULL) {
-            free(buf_);
-        }
-        buf_ = block.buf_;
-        block.buf_ = NULL;
-        return *this;
+    void swap(DataBlock &data) {
+        buffer_.swap(data.buffer_);
+        std::swap(read_, data.read_);
+        std::swap(write_, data.write_);
     }
 
     size_t readPosition() const {
-        return start_;
+        return read_;
     }
 
     size_t writePosition() const {
-        return end_;
+        return write_;
     }
 
     size_t capacity() const {
-        return cap_;
-    }
-
-    size_t prependSpaceBytes() const {
-        return start_;
-    }
-
-    size_t writableBytes() const {
-        return cap_ - end_;
+        return buffer_.size();
     }
 
     size_t readableBytes() const {
-        return end_ - start_;
+        return write_ - read_;
+    }
+
+    size_t writeableBytes() const {
+        return buffer_.size() - write_;
+    }
+
+    size_t prependableBytes() const {
+        return read_;
+    }
+
+    size_t totalSpace() const {
+        return writeableBytes() + prependableBytes();
+    }
+
+    char* peek() {
+        return &buffer_[0];
+    }
+
+    const char* peek() const {
+        return &buffer_[0];
     }
 
     void setReadPosition(size_t pos) {
-        assert(pos <= end_);
-        start_ = pos;
-        if (start_ == end_) {
-            start_ = end_ = 0;
+        assert(pos <= write_);
+        read_ = pos;
+        if (read_ == write_ && read_ != capacity()) {
+            read_ = write_ = 0;
         }
     }
 
     void setWritePosition(size_t pos) {
-        assert(pos <= cap_ && pos >= start_);
-        end_ = pos;
-        if (start_ == end_) {
-            start_ = end_ = 0;
+        assert(pos >= read_ && pos <= capacity());
+        write_ = pos;
+        if (read_ == write_ && read_ != capacity()) {
+            read_ = write_ = 0;
         }
     }
 
-    char* peek() {
-        return buf_ + start_;
-    }
-
-    const char* peek() const {
-        return buf_ + start_;
-    }
-
-    char* head() {
-        return buf_;
-    }
-
-    const char* head() const {
-        return buf_;
-    }
-
-    bool empty() const {
-        return start_ == end_;
-    }
-
-    bool full() const {
-        return start_ == 0 && end_ == cap_;
-    }
+    void realign();
 
 private:
-    char *buf_;
+    std::vector<char> buffer_;
 
-    size_t start_, end_, cap_;
+    size_t read_;
+
+    size_t write_;
 };
 
-class Buffer : public google::protobuf::io::ZeroCopyOutputStream
+
+class Buffer
 {
 public:
-    enum{initSize = 4096};
-
-    explicit Buffer(size_t size=initSize)
-        : originalSize_(0)
-    {
-        blocks_.emplace_back(size);
-    }
+    Buffer();
 
     Buffer(const Buffer &buffer);
 
     Buffer(Buffer &&buffer);
 
-    ~Buffer() {
+    Buffer& operator=(const Buffer &buffer);
+
+    void swap(Buffer &buffer);
+
+    size_t readableBytes() const {
+        return readableBytes_;
     }
 
-    void swap(Buffer &buffer) {
-        blocks_.swap(buffer.blocks_);
+    size_t capacity() const {
+        return capacity_;
     }
-
-    size_t readableBytes() const;
-
-    size_t writableBytes() const;
-
-    size_t prependSpaceBytes() const;
-
-    void ensureWritableBytes(size_t size) {
-        if (writableBytes() < size) {
-            size_t bytes = size - writableBytes();
-            bytes += bytes<1024? bytes: 1024;
-            blocks_.emplace_back(bytes);
-        }
-    }
-
-    void ensurePrependBytes(size_t size) {
-        if (prependSpaceBytes() < size) {
-            size_t bytes = size - prependSpaceBytes();
-            blocks_.emplace_front(bytes);
-        }
-    }
-
-    int8_t peekInt8() const {
-        std::string str = peekAsString(1);
-        return *reinterpret_cast<const int8_t*>(str.data());
-    }
-
-    int8_t readInt8() {
-        std::string str = retrieveAsString(1);
-        return *reinterpret_cast<const int8_t*>(str.data());
-    }
-
-    void appendInt8(int8_t val) {
-        append(&val, sizeof(val));
-    }
-
-    void prependInt8(int8_t val) {
-        prepend(&val, sizeof(val));
-    }
-
-    int16_t peekInt16() const {
-        std::string str = peekAsString(2);
-        const int16_t *p = reinterpret_cast<const int16_t*>(str.data());
-        return ntohs(*p);
-    }
-
-    int16_t readInt16() {
-        std::string str = retrieveAsString(2);
-        const int16_t *p = reinterpret_cast<const int16_t*>(str.data());
-        return ntohs(*p);
-    }
-
-    void appendInt16(int16_t val) {
-        int16_t nval = htons(val);
-        append(&nval, sizeof(nval));
-    }
-
-    void prependInt16(int16_t val) {
-        int16_t nval = htons(val);
-        prepend(&nval, sizeof(nval));
-    }
-
-    int32_t peekInt32() const {
-        std::string str = peekAsString(4);
-        const int32_t *p = reinterpret_cast<const int32_t*>(str.data());
-        return ntohl(*p);
-    }
-
-    int32_t readInt32() {
-        std::string str = retrieveAsString(4);
-        const int32_t *p = reinterpret_cast<const int32_t*>(str.data());
-        return ntohl(*p);
-    }
-
-    void appendInt32(int32_t val) {
-        int32_t nval = htonl(val);
-        append(&nval, sizeof(nval));
-    }
-
-    void prependInt32(int32_t val) {
-        int32_t nval = htonl(val);
-        prepend(&nval, sizeof(nval));
-    }
-
-    int64_t peekInt64() const {
-        std::string str = peekAsString(8);
-        const int64_t *p = reinterpret_cast<const int64_t*>(str.data());
-        return ntohll(*p);
-    }
-
-    int64_t readInt64() {
-        std::string str = retrieveAsString(8);
-        const int64_t *p = reinterpret_cast<const int64_t*>(str.data());
-        return ntohll(*p);
-    }
-
-    void appendInt64(int64_t val) {
-        int64_t nval = htonll(val);
-        append(&nval, sizeof(nval));
-    }
-
-    void prependInt64(int64_t val) {
-        int64_t nval = htonll(val);
-        prepend(&nval, sizeof(nval));
-    }
-
-    void discard(size_t size);
-
-    void discardAll() {
-        blocks_.erase(blocks_.begin(), blocks_.end());
-    }
-
-    std::string retrieveAllAsString() {
-        return std::move(retrieveAsString(readableBytes()));
-    }
-
-    std::string retrieveAsString(size_t size);
-
-    std::string peekAsString(size_t size) const;
 
     void append(const void *ptr, size_t len);
-
-    void prepend(const void *ptr, size_t len);
 
     void append(const std::string &str) {
         append(str.c_str(), str.size());
     }
 
+    void prepend(const void *ptr, size_t len);
+
     void prepend(const std::string &str) {
         prepend(str.c_str(), str.size());
     }
 
-    // 只供TcpConnection调用
+    std::string toString(size_t len) const;
+
+    std::string toString() const;
+
+    std::string retrieveAsString(size_t len);
+
+    std::string retrieveAllAsString();
+
+    void discard(size_t len);
+
+    void discardAll();
+
+    void appendInt8(int8_t val) {
+        append(&val, sizeof(val));
+    }
+
+    void appendInt16(int16_t val) {
+        int16_t nval = htons(val);
+        append(&nval, sizeof(val));
+    }
+
+    void appendInt32(int32_t val) {
+        int32_t nval = htonl(val);
+        append(&nval, sizeof(val));
+    }
+
+    void appendInt64(int64_t val) {
+        int64_t nval = htonll(val);
+        append(&nval, sizeof(val));
+    }
+
+    int8_t readInt8() {
+        int8_t val = peekInt8();
+        discard(sizeof(int8_t));
+        return val;
+    }
+
+    int8_t peekInt8() const {
+        std::string str = toString(sizeof(int8_t));
+        const int8_t *val = reinterpret_cast<const int8_t*>(str.data());
+        return *val;
+    }
+
+    int16_t readInt16() {
+        int16_t val = peekInt16();
+        discard(sizeof(int16_t));
+        return val;
+    }
+
+    int16_t peekInt16() const {
+        std::string str = toString(sizeof(int16_t));
+        const int16_t *val = reinterpret_cast<const int16_t*>(str.data());
+        return ntohs(*val);
+    }
+
+    int32_t readInt32() {
+        int32_t val = peekInt32();
+        discard(sizeof(int32_t));
+        return val;
+    }
+
+    int32_t peekInt32() const {
+        std::string str = toString(sizeof(int32_t));
+        const int32_t *val = reinterpret_cast<const int32_t*>(str.data());
+        return ntohl(*val);
+    }
+
+    int64_t readInt64() {
+        int64_t val = peekInt64();
+        discard(sizeof(int64_t));
+        return val;
+    }
+
+    int64_t peekInt64() const {
+        std::string str = toString(sizeof(int64_t));
+        const int64_t *val = reinterpret_cast<const int64_t*>(str.data());
+        return ntohll(*val);
+    }
+
+    // 下面三个函数只供TcpConnection调用
     void initUVBuffer(std::vector<uv_buf_t> &bufs) const;
 
-    void initUVBuffer(uv_buf_t *buf);
+    void initUVBuffer(uv_buf_t* buf);
 
-    void shift(size_t len) {
-        auto point = appendPoint();
-        auto it = point.first;
-        it->setWritePosition(it->writePosition() + len);
-    }
+    void extend(size_t len);
 
-    virtual bool Next(void ** data, int * size) {
-        if (writableBytes() <= 0) {
-            ensurePrependBytes(initSize);
-        }
-        auto point = appendPoint();
-        auto it = point.first;
-        size_t bytes = it->writableBytes();
-        *data = static_cast<void*>(it->head() + it->writePosition());
-        *size = bytes;
-        if (originalSize_ == 0) {
-            originalSize_ = readableBytes();
-        }
-        it->setWritePosition(it->writePosition() + bytes);
-        return true;
-    }
-
-    virtual void BackUp(int count) {
-        discard(count);
-    }
-
-    virtual int64_t ByteCount() const {
-        int64_t bytes = readableBytes() - originalSize_;
-        originalSize_ = 0;
-        return bytes;
-    }
+    void debug() const;
 
 private:
-    std::pair<std::deque<Block>::iterator, size_t> appendPoint();
+    std::list<DataBlock> list_;
 
-    std::pair<std::deque<Block>::iterator, size_t> prependPoint(size_t size);
+    std::list<DataBlock>::iterator firstWithData_;
 
-private:
-    std::deque<Block> blocks_;
+    std::list<DataBlock>::iterator lastWithData_;
 
-    mutable size_t originalSize_;
+    size_t readableBytes_;
+
+    size_t capacity_;
 };
+
 
 NAMESPACE_END
 
