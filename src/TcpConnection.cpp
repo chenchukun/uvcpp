@@ -80,7 +80,7 @@ void TcpConnection::allocCallback(uv_handle_t* handle, size_t suggested_size, uv
     auto &data = *(static_cast<pair<weak_ptr<TcpConnection>, weak_ptr<Entry>>*>(handle->data));
     TcpConnectionPtr conn = data.first.lock();
     if (conn) {
-        conn->buffer_.initUVBuffer(buf);
+        conn->buffer_.next(buf->base, buf->len);
     }
     else {
         buf->base = NULL;

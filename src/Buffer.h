@@ -10,9 +10,12 @@
 #include <arpa/inet.h>
 #include <uv.h>
 #include <vector>
-#include <google/protobuf/io/zero_copy_stream.h>
 
 NAMESPACE_START
+
+class BufferOutputStream;
+
+class BufferInputStream;
 
 class DataBlock
 {
@@ -112,6 +115,10 @@ private:
 class Buffer
 {
 public:
+    friend class BufferOutputStream;
+
+    friend class BufferInputStream;
+
     Buffer();
 
     Buffer(const Buffer &buffer);
@@ -221,12 +228,15 @@ public:
         return ntohll(*val);
     }
 
-    // 下面三个函数只供TcpConnection调用
-    void initUVBuffer(std::vector<uv_buf_t> &bufs) const;
+    void all(std::vector<std::pair<char*, size_t> > &bufs) const;
 
-    void initUVBuffer(uv_buf_t* buf);
+    void next(char* &data, size_t &len);
 
     void extend(size_t len);
+
+    void unwrite(size_t len);
+
+    void unread(size_t len);
 
     void debug() const;
 

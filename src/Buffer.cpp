@@ -240,25 +240,23 @@ string Buffer::retrieveAllAsString()
     return retrieveAsString(readableBytes());
 }
 
-void Buffer::initUVBuffer(std::vector<uv_buf_t> &bufs) const
+void Buffer::all(vector<pair<char*, size_t> > &bufs) const
 {
     auto it = firstWithData_;
     while (it != lastWithData_) {
         if (it->readableBytes() > 0) {
-            bufs.push_back(uv_buf_t());
-            bufs.back().base = const_cast<char*>(it->peek() + it->readPosition());
-            bufs.back().len = it->readableBytes();
+            auto item = make_pair(const_cast<char*>(it->peek() + it->readPosition()), it->readableBytes());
+            bufs.push_back(item);
         }
         ++it;
     }
     if (it != list_.end() && it->readableBytes() > 0) {
-        bufs.push_back(uv_buf_t());
-        bufs.back().base = const_cast<char*>(it->peek() + it->readPosition());
-        bufs.back().len = it->readableBytes();
+        auto item = make_pair(const_cast<char*>(it->peek() + it->readPosition()), it->readableBytes());
+        bufs.push_back(item);
     }
 }
 
-void Buffer::initUVBuffer(uv_buf_t* buf)
+void Buffer::next(char* &data, size_t &len)
 {
     list<DataBlock>::iterator it = lastWithData_;
     if (lastWithData_ == list_.end()) {
@@ -283,8 +281,8 @@ void Buffer::initUVBuffer(uv_buf_t* buf)
     else if (lastWithData_->prependableBytes() >= lastWithData_->capacity() / 2) {
         lastWithData_->realign();
     }
-    buf->base = it->peek() + it->readPosition();
-    buf->len = it->writeableBytes();
+    data = it->peek() + it->readPosition();
+    len = it->writeableBytes();
 }
 
 void Buffer::extend(size_t len)
@@ -295,6 +293,18 @@ void Buffer::extend(size_t len)
     }
     it->setWritePosition(it->writePosition() + len);
     readableBytes_ += len;
+}
+
+void Buffer::unwrite(size_t len)
+{
+    assert(len <= lastWithData_->readableBytes());
+    lastWithData_->setWritePosition(lastWithData_->writePosition() - len);
+    readableBytes_ -= len;
+}
+
+void unread(size_t len)
+{
+
 }
 
 void Buffer::debug() const

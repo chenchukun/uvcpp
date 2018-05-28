@@ -1,4 +1,6 @@
 #include "../Buffer.h"
+#include "../BufferStream.h"
+#include "person.pb.h"
 #include <iostream>
 using namespace std;
 using namespace uvcpp;
@@ -115,10 +117,8 @@ void test(int n)
     }
 }
 
-int main(int argc, char **argv)
+void testCopy()
 {
-//    test(stoi(argv[1]));
-
     Buffer buffer;
     buffer.append(randString(500));
     buffer.prepend("12345", 5);
@@ -134,6 +134,33 @@ int main(int argc, char **argv)
     buffer4.swap(buffer3);
     buffer3.debug();
     buffer4.debug();
+}
+
+void testStream()
+{
+    Buffer buffer;
+    Person person;
+    person.set_name("kiku");
+    person.set_id(6180);
+    BufferOutputStream outputStream(&buffer);
+    person.SerializeToZeroCopyStream(&outputStream);
+    cout << buffer.toString() << endl;
+
+    Person person1;
+    person1.ParseFromString(buffer.toString());
+    cout << person1.DebugString() << endl;
+
+    BufferInputStream inputStream(&buffer, buffer.readableBytes());
+    Person person2;
+    person2.ParseFromZeroCopyStream(&inputStream);
+    cout << person2.DebugString() << endl;
+}
+
+int main(int argc, char **argv)
+{
+//    test(stoi(argv[1]));
+//    testCopy();
+    testStream();
 
     return 0;
 }

@@ -165,7 +165,13 @@ private:
               buffer(std::move(buf)),
               conn(c)
         {
-            buffer.initUVBuffer(bufs);
+            std::vector<std::pair<char*, size_t> > pairBufs;
+            buffer.all(pairBufs);
+            for (int i=0; i<pairBufs.size(); ++i) {
+                bufs.push_back(uv_buf_t());
+                bufs.back().base = pairBufs[i].first;
+                bufs.back().len = pairBufs[i].second;
+            }
         }
 
         ~WriteContext() {
