@@ -281,17 +281,16 @@ void Buffer::next(char* &data, size_t &len)
     else if (lastWithData_->prependableBytes() >= lastWithData_->capacity() / 2) {
         lastWithData_->realign();
     }
-    data = it->peek() + it->readPosition();
+    data = it->peek() + it->writePosition();
     len = it->writeableBytes();
 }
 
 void Buffer::extend(size_t len)
 {
-    auto it = lastWithData_;
     if (lastWithData_->writeableBytes() == 0) {
-        ++it;
+        ++lastWithData_;
     }
-    it->setWritePosition(it->writePosition() + len);
+    lastWithData_->setWritePosition(lastWithData_->writePosition() + len);
     readableBytes_ += len;
 }
 

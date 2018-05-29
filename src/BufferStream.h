@@ -18,9 +18,10 @@ public:
 
     virtual bool Next(void** data, int* size) {
         char **buf = reinterpret_cast<char**>(data);
-        size_t *len = reinterpret_cast<size_t*>(size);
-        buffer_->next(*buf, *len);
-        buffer_->extend(*len);
+        size_t len;
+        buffer_->next(*buf, len);
+        buffer_->extend(len);
+        *size = len;
         return true;
     }
 

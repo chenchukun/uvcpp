@@ -139,11 +139,17 @@ void testCopy()
 void testStream()
 {
     Buffer buffer;
+    buffer.append(randString(1020));
+    buffer.debug();
     Person person;
     person.set_name("kiku");
     person.set_id(6180);
     BufferOutputStream outputStream(&buffer);
     person.SerializeToZeroCopyStream(&outputStream);
+
+    buffer.debug();
+    buffer.discard(1020);
+    buffer.debug();
     cout << buffer.toString() << endl;
 
     Person person1;
