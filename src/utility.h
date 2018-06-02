@@ -15,7 +15,7 @@
 #endif
 #include <ctime>
 #include <string>
-
+#include <gperftools/tcmalloc.h>
 
 #define CHECK_ZERO_RETURN(fun)  \
     {                           \
@@ -127,5 +127,14 @@ inline int gettimeofday(struct timeval *tp, void *tzp)
 #define NAMESPACE_START namespace uvcpp {
 
 #define NAMESPACE_END }
+
+#define USE_TCMALLOC 1
+
+#if defined(USE_TCMALLOC)
+    #define malloc(size) tc_malloc(size)
+    #define calloc(count,size) tc_calloc(count,size)
+    #define realloc(ptr,size) tc_realloc(ptr,size)
+    #define free(ptr) tc_free(ptr)
+#endif
 
 #endif //LIBUVCPP_UTILITY_H

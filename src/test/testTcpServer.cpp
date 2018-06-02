@@ -4,30 +4,39 @@
 using namespace std;
 using namespace uvcpp;
 
-int main()
+int main(int argc, char **argv)
 {
+    int threadNum = 1;
+    if (argc > 2) {
+        threadNum = stoi(argv[1]);
+    }
     EventLoop eventLoop;
     TcpServer server(&eventLoop);
-    server.setThreadNum(4);
+    server.setThreadNum(threadNum);
+/*
     server.setIdleTimeoutCallback(20, [] (TcpConnectionPtr &conn) {
         cout << "Connection [" << conn->getPeerAddr().getIpPort() << "] timeout\n";
         conn->shutdown();
     });
+*/
 
     server.setConnectionCallback([](TcpConnectionPtr &conn) {
         cout << conn->getPeerAddr().getIpPort() << (conn->connected()?" online": " offline") << endl;
     });
 
     server.setMessageCallback([] (TcpConnectionPtr &conn, Buffer &buffer) {
-        size_t len = buffer.readableBytes();
-        cout << "Recv " << buffer.toString() << endl;
-        buffer.prepend(to_string(len) + " bytes: ");
-        conn->send(buffer);
+//        size_t len = buffer.readableBytes();
+//        buffer.prepend(to_string(len) + " bytes: ");
+	    string str = buffer.retrieveAllAsString();
+//        cout << "Recv " << str << endl;
+        conn->send(move(str));
     });
 
+/*
     server.setWriteCompleteCallback([] (TcpConnectionPtr &conn) {
 //        cout << "Send data to " << conn->getPeerAddr().getIpPort() << " finish" << endl;
     });
+*/
 
     int ret = server.start(SockAddr(6180));
     if (ret != 0) {
@@ -38,6 +47,7 @@ int main()
         cout << "Start server success" << endl;
     }
 
+/*
     eventLoop.runEvery(10000, [&server] {
         auto connMap = server.getAllConnection();
         auto it = connMap.begin();
@@ -60,6 +70,7 @@ int main()
         }
         cout << "-----------------------------------------" << endl;
     });
+*/
 
     eventLoop.run();
     return 0;
