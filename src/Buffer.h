@@ -155,6 +155,8 @@ public:
 
     std::string retrieveAsString(size_t len);
 
+    std::string retrieveCStyleString();
+
     std::string retrieveAllAsString();
 
     void discard(size_t len);

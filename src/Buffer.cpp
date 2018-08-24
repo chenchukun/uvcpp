@@ -235,6 +235,29 @@ string Buffer::retrieveAsString(size_t len)
     return str;
 }
 
+string Buffer::retrieveCStyleString()
+{
+    char tmp[4096];
+    string str;
+    int index = 0;
+    while (true) {
+        tmp[index] = peekInt8();
+        discard(1);
+        if (index == sizeof(tmp) - 2 || tmp[index] == 0) {
+            tmp[index + 1] = 0;
+            str += tmp;
+            if (tmp[index] == 0) {
+                break;
+            }
+            index = 0;
+        }
+        else {
+            ++index;
+        }
+    }
+    return str;
+}
+
 string Buffer::retrieveAllAsString()
 {
     return retrieveAsString(readableBytes());

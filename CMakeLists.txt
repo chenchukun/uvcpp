@@ -11,7 +11,7 @@ option(BUILD_SHARED_LIBS "build uvcpp shared library" OFF)
 option(BUILD_STATIC_LIBS "build uvcpp static library" ON)
 
 set(COMPILE_DEFINITIONS "-DUSE_TCMALLOC")
-set(CMAKE_C_FLAGS  "-O2")
-set(CMAKE_CXX_FLAGS "-std=c++11 -O2")
+set(CMAKE_C_FLAGS  "-g")
+set(CMAKE_CXX_FLAGS "-std=c++11 -g")
 
 add_subdirectory(src)
