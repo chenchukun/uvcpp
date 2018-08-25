@@ -22,7 +22,7 @@ public:
 
 	T take();
 
-	bool poll(T &elem, double second);
+	bool poll(T &elem, long long milliseconds);
 
 	uint32_t size() {
 		std::lock_guard<std::mutex> locker(mutex_);
@@ -49,7 +49,7 @@ void BlockingQueue<T>::put(const T &elem)
 		std::lock_guard<std::mutex> locker(mutex_);
 		queue_.push(elem);
 	}
-	cond_.notify_one();
+	cond_.notify_all();
 }
 
 template<typename T>
@@ -65,12 +65,12 @@ T BlockingQueue<T>::take()
 }
 
 template<typename T>
-bool BlockingQueue<T>::poll(T &elem, double second)
+bool BlockingQueue<T>::poll(T &elem, long long milliseconds)
 {
 	std::unique_lock<std::mutex> locker(mutex_);
 	while (queue_.empty()) {
-		int ret = cond_.wait(locker, second);
-		if (ret == ETIMEDOUT) {
+		if (cond_.wait_for(locker, std::chrono::milliseconds(milliseconds))
+            == std::cv_status::timeout) {
 			return false;
 		}
 	}

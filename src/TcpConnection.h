@@ -24,6 +24,10 @@ public:
 
     ~TcpConnection();
 
+    TcpConnection(const TcpConnection&) = delete;
+
+    TcpConnection& operator=(const TcpConnection&) = delete;
+
     void setConnectionCallback(const ConnectionCallback &callback) {
         connectionCallback_ = callback;
     }

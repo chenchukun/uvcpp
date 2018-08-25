@@ -18,12 +18,12 @@ public:
     static int encode(const google::protobuf::Message &message, Buffer &buffer) {
         std::string result;
         std::string typeName = message.GetTypeName();
-        // 类型名长度,包含\0
-        result.append(typeName.c_str(), typeName.size() + 1);
+        result += typeName;
         if (!message.AppendToString(&result)) {
             return CODEC_ERR;
         }
-        buffer.appendInt32(result.size());
+        buffer.appendInt32(result.size() + sizeof(int32_t));
+        buffer.appendInt32(typeName.size());
         buffer.append(result);
         return CODEC_OK;
     }
@@ -34,12 +34,13 @@ public:
             return CODEC_UNABLE;
         }
         buffer.discard(sizeof(int32_t));
-        std::string typeName = buffer.retrieveCStyleString();
+        int32_t nameLen = buffer.readInt32();
+        std::string typeName = buffer.retrieveAsString(nameLen);
         message = createMessage(typeName);
         if (message == NULL) {
             return CODEC_ERR;
         }
-        size_t len = packLen - typeName.size() - 1;
+        size_t len = packLen - typeName.size() - sizeof(int32_t);
         BufferInputStream inputStream(&buffer, len);
         if (!message->ParseFromZeroCopyStream(&inputStream)) {
             return CODEC_ERR;

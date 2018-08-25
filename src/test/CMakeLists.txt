@@ -26,3 +26,9 @@ target_link_libraries(testBuffer uvcpp_static uv protobuf)
 
 add_executable(testCodec "testCodec.cpp" "person.pb.cc")
 target_link_libraries(testCodec uvcpp_static uv protobuf)
+
+add_executable(testQueue "testQueue.cpp")
+target_link_libraries(testQueue uvcpp_static uv)
+
+add_executable(testSingleton "testSingleton.cpp")
+target_link_libraries(testSingleton uvcpp_static uv)

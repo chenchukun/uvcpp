@@ -31,6 +31,10 @@ public:
         connectionPtr_->shutdown();
     }
 
+    TcpClient(const TcpClient&) = delete;
+
+    TcpClient& operator=(const TcpClient&) = delete;
+
     void setConnectionCallback(const ConnectionCallback &callback) {
         connectionCallback_ = callback;
     }

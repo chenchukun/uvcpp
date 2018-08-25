@@ -24,6 +24,10 @@ public:
 
     ~EventLoopThreadPool();
 
+    EventLoopThreadPool(const EventLoopThreadPool&) = delete;
+
+    EventLoopThreadPool& operator=(const EventLoopThreadPool&) =delete;
+
     void start(ThreadInitCallback initCallback=ThreadInitCallback());
 
     std::vector<EventLoop*> getAllLoops() {

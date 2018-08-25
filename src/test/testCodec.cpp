@@ -1,4 +1,5 @@
 #include "../Codec.h"
+#include "../Dispatcher.h"
 #include "../Buffer.h"
 #include "person.pb.h"
 #include <iostream>
@@ -23,7 +24,15 @@ int main()
         cerr << "decode error: " << ret << endl;
         exit(ret);
     }
-    cout << message->DebugString() << endl;
+
+    Dispatcher dispatcher;
+    dispatcher.registerMessageCallback(message->GetTypeName(), [] (Dispatcher::MessagePointer message) {
+        cout << message->DebugString() << endl;
+    });
+
+    dispatcher.onMessage(message);
+
     delete message;
+
     return 0;
 }

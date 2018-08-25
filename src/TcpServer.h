@@ -24,6 +24,10 @@ public:
 
     ~TcpServer();
 
+    TcpServer(const TcpServer&) = delete;
+
+    TcpServer& operator=(const TcpServer&) = delete;
+
     int start(const SockAddr &addr, int backlog=1024);
 
     void setThreadNum(size_t num) {

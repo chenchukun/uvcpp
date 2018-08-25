@@ -25,6 +25,10 @@ public:
 
     ~EventLoopThread();
 
+    EventLoopThread(const EventLoopThread&) = delete;
+
+    EventLoopThread& operator=(const EventLoopThread&) = delete;
+
     EventLoop* startLoop();
 
 private:
