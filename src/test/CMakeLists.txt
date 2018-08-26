@@ -32,3 +32,6 @@ target_link_libraries(testQueue uvcpp_static uv)
 
 add_executable(testSingleton "testSingleton.cpp")
 target_link_libraries(testSingleton uvcpp_static uv)
+
+add_executable(testThreadPool "testThreadPool.cpp")
+target_link_libraries(testThreadPool uvcpp_static uv)
